@@ -3,6 +3,7 @@ import React from 'react';
 import { Medication, AppSettings } from '../types';
 import { Plus, Trash2, Pill, AlertTriangle, CalendarDays, CheckCircle2, AlertCircle, XCircle, Clock, Info, Pencil } from 'lucide-react';
 import { calculateDaysOfStockLeft } from '../src/domain/stock';
+import { getStockStatusType, getExpiryStatusType, getDaysUntilExpiry } from '../src/domain/medicationRules';
 
 interface Props {
   meds: Medication[];
@@ -16,12 +17,13 @@ const Medications: React.FC<Props> = ({ meds, settings, onAdd, onEdit, onDelete 
   
   const getStockStatus = (med: Medication) => {
     const daysLeft = calculateDaysOfStockLeft(med);
+    const statusType = getStockStatusType(med, daysLeft, settings.thresholdRunningOut);
 
-    if (med.currentStock <= 0) {
+    if (statusType === 'OUT_OF_STOCK') {
       return { label: 'Esgotado', color: 'text-slate-400', bg: 'bg-slate-100', icon: AlertCircle };
     }
     
-    if (daysLeft !== null && daysLeft <= settings.thresholdRunningOut) {
+    if (statusType === 'RUNNING_OUT') {
       return { label: `Acabando (${daysLeft}d)`, color: 'text-orange-500', bg: 'bg-orange-50', icon: AlertTriangle };
     }
 
@@ -29,20 +31,17 @@ const Medications: React.FC<Props> = ({ meds, settings, onAdd, onEdit, onDelete 
   };
 
   const getExpiryStatus = (med: Medication) => {
-    if (!med.expiryDate) return { label: 'Sem data', color: 'text-slate-400', bg: 'bg-slate-50', icon: Info };
-
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expiry = new Date(med.expiryDate + 'T12:00:00');
-    expiry.setHours(0, 0, 0, 0);
+    const statusType = getExpiryStatusType(med, today, settings.thresholdExpiring);
+    const diffDays = getDaysUntilExpiry(med.expiryDate, today);
 
-    const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    if (statusType === 'NO_DATE') return { label: 'Sem data', color: 'text-slate-400', bg: 'bg-slate-50', icon: Info };
 
-    if (diffDays < 0) {
+    if (statusType === 'EXPIRED') {
       return { label: 'Vencido', color: 'text-red-500', bg: 'bg-red-50', icon: XCircle };
     }
 
-    if (diffDays <= settings.thresholdExpiring) {
+    if (statusType === 'EXPIRING_SOON') {
       return { label: `Vencendo em ${diffDays}d`, color: 'text-orange-500', bg: 'bg-orange-50', icon: Clock };
     }
 

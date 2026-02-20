@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, List, 
 import { Appointment, Medication, DoseEvent } from '../types';
 import { isOutOfStockOnDate } from '../src/domain/stock';
 import { isPastDate, isFutureDate, isTodayDate, getCalendarDisplayMode } from '../src/domain/calendarRules';
+import { isMedicationExpired, hasStock } from '../src/domain/medicationRules';
 
 type CalendarViewMode = 'monthly' | 'weekly';
 
@@ -126,9 +127,8 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
       });
 
       if (displayMode === 'STATUS') {
-        const expiry = med.expiryDate ? new Date(med.expiryDate + 'T23:59:59') : null;
-        const isExpiredOnDate = expiry && (isFuture ? expiry < new Date(date.getTime()) : expiry < now);
-        const isOutOfStock = isFuture ? isOutOfStockOnDate(med, date, today) : med.currentStock <= 0;
+        const isExpiredOnDate = isMedicationExpired(med.expiryDate, isFuture ? new Date(date.getTime()) : now);
+        const isOutOfStock = isFuture ? isOutOfStockOnDate(med, date, today) : !hasStock(med.currentStock);
 
         if (isExpiredOnDate) {
           indicator = { type: 'status', color: 'bg-red-500', label: 'Vencido' };

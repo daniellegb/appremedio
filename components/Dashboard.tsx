@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from '../types';
 import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil } from 'lucide-react';
 import { calculateDaysOfStockLeft } from '../src/domain/stock';
+import { isMedicationExpired, getDaysUntilExpiry } from '../src/domain/medicationRules';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface Props {
@@ -54,15 +55,6 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
     setPrnStep('list');
     setCustomPrnDate(new Date().toLocaleDateString('en-CA'));
     setCustomPrnTime(`${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`);
-  };
-
-  const isExpired = (med: Medication) => {
-    if (!med.expiryDate) return false;
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    const expiry = new Date(med.expiryDate + 'T12:00:00');
-    expiry.setHours(0, 0, 0, 0);
-    return expiry < todayDate;
   };
 
   // Filtra consultas passadas e ordena as futuras por proximidade
@@ -153,14 +145,12 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
   // Lógica de Alertas de estoque e validade
   const getMedAlerts = () => {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
     return meds.map(med => {
       const daysStockLeft = calculateDaysOfStockLeft(med);
-      
-      const todayDate = new Date();
-      todayDate.setHours(0,0,0,0);
-      const expiry = med.expiryDate ? new Date(med.expiryDate + 'T12:00:00') : null;
-      if(expiry) expiry.setHours(0,0,0,0);
-      const diffExpiryDays = expiry ? Math.ceil((expiry.getTime() - todayDate.getTime()) / (1000 * 3600 * 24)) : null;
+      const diffExpiryDays = getDaysUntilExpiry(med.expiryDate, todayDate);
 
       const alerts = [];
       
@@ -290,7 +280,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
           <div className="space-y-3">
             {todaySchedule.map((item) => {
-              const expired = isExpired(item.med);
+              const expired = isMedicationExpired(item.med.expiryDate, today);
               return (
                 <div 
                   key={item.id} 
