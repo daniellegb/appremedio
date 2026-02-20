@@ -37,9 +37,37 @@ const App: React.FC = () => {
     return defaultValue;
   };
 
-  const [meds, setMeds] = useState<Medication[]>(() => loadData(STORAGE_KEYS.MEDS, INITIAL_MEDS));
-  const [doses, setDoses] = useState<DoseEvent[]>(() => loadData(STORAGE_KEYS.DOSES, INITIAL_DOSES));
-  const [appointments, setAppointments] = useState<Appointment[]>(() => loadData(STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS));
+  const [meds, setMeds] = useState<Medication[]>(() => {
+    const data = loadData(STORAGE_KEYS.MEDS, INITIAL_MEDS);
+    // Deduplicate by ID
+    const seen = new Set();
+    return data.filter(m => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
+  });
+  const [doses, setDoses] = useState<DoseEvent[]>(() => {
+    const data = loadData(STORAGE_KEYS.DOSES, INITIAL_DOSES);
+    const seen = new Set();
+    return data.filter(d => {
+      // For doses, we also want to avoid duplicates of the same med/time/date
+      const key = `${d.medicationId}-${d.scheduledTime}-${d.date}`;
+      if (seen.has(d.id) || seen.has(key)) return false;
+      seen.add(d.id);
+      seen.add(key);
+      return true;
+    });
+  });
+  const [appointments, setAppointments] = useState<Appointment[]>(() => {
+    const data = loadData(STORAGE_KEYS.APPOINTMENTS, INITIAL_APPOINTMENTS);
+    const seen = new Set();
+    return data.filter(a => {
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+  });
   const [settings, setSettings] = useState<AppSettings>(() => loadData(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS));
 
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
@@ -87,12 +115,14 @@ const App: React.FC = () => {
   }, [settings]);
 
   const handleSaveMedication = (newMed: Medication) => {
-    if (editingMedication) {
-      setMeds(prev => prev.map(m => m.id === newMed.id ? newMed : m));
-    } else {
+    setMeds(prev => {
+      const exists = prev.some(m => m.id === newMed.id);
+      if (exists) {
+        return prev.map(m => m.id === newMed.id ? newMed : m);
+      }
       const finalMed = { ...newMed, color: newMed.color || COLORS[Math.floor(Math.random() * COLORS.length)] };
-      setMeds(prev => [finalMed, ...prev]);
-    }
+      return [finalMed, ...prev];
+    });
     setEditingMedication(null);
     setView('meds');
   };
@@ -116,7 +146,8 @@ const App: React.FC = () => {
 
   const handleSaveAppointment = (newApp: Appointment) => {
     setAppointments(prev => {
-      if (editingAppointment) {
+      const exists = prev.some(app => app.id === newApp.id);
+      if (exists) {
         return prev.map(app => app.id === newApp.id ? newApp : app);
       }
       return [newApp, ...prev];
@@ -135,19 +166,44 @@ const App: React.FC = () => {
     );
   };
 
-  const handleToggleDose = (doseId: string, medicationId?: string, time?: string) => {
+  const handleToggleDose = (doseId: string, medicationId?: string, time?: string, date?: string) => {
     const todayStr = new Date().toLocaleDateString('en-CA');
+    const targetDate = date || todayStr;
     
     setDoses(prev => {
-      const existingIndex = prev.findIndex(d => d.id === doseId);
+      // 1. Tentar encontrar pelo ID exato (seja real ou virtual)
+      let existingIndex = prev.findIndex(d => d.id === doseId);
+      
+      // 2. Se não encontrou pelo ID e temos med/time/date, tentar encontrar um registro real equivalente
+      if (existingIndex === -1 && medicationId && time) {
+        existingIndex = prev.findIndex(d => 
+          d.medicationId === medicationId && 
+          d.scheduledTime === time && 
+          d.date === targetDate
+        );
+      }
       
       if (existingIndex > -1) {
         // Toggle de dose existente
         const updatedDoses = [...prev];
         const currentDose = updatedDoses[existingIndex];
+        const med = meds.find(m => m.id === currentDose.medicationId);
+        const isPrn = med?.usageCategory === 'prn';
+        
         const newStatus = currentDose.status === 'taken' ? 'pending' : 'taken';
         
-        // Atualiza estoque baseado na mudança de status
+        // Se for PRN e estivermos desmarcando (voltando para pending), deletamos o registro
+        if (isPrn && newStatus === 'pending') {
+          // Atualiza estoque (devolve 1)
+          setMeds(currentMeds => currentMeds.map(m => 
+            m.id === currentDose.medicationId 
+              ? { ...m, currentStock: m.currentStock + 1 } 
+              : m
+          ));
+          return prev.filter((_, i) => i !== existingIndex);
+        }
+
+        // Atualiza estoque baseado na mudança de status para meds regulares
         setMeds(currentMeds => currentMeds.map(m => 
           m.id === currentDose.medicationId 
             ? { ...m, currentStock: Math.max(0, m.currentStock + (newStatus === 'taken' ? -1 : 1)) } 
@@ -157,11 +213,11 @@ const App: React.FC = () => {
         updatedDoses[existingIndex] = { ...currentDose, status: newStatus };
         return updatedDoses;
       } else if (medicationId && time) {
-        // Criação de novo evento de dose a partir de um slot "virtual" do dashboard
+        // Criação de novo evento de dose
         const newDose: DoseEvent = {
           id: Math.random().toString(36).substr(2, 9),
           medicationId,
-          date: todayStr,
+          date: targetDate,
           scheduledTime: time,
           status: 'taken'
         };
@@ -203,7 +259,7 @@ const App: React.FC = () => {
       case 'add-appointment':
         return <AddAppointment onSave={handleSaveAppointment} onCancel={() => setView('appointments')} initialData={editingAppointment} />;
       case 'calendar':
-        return <Calendar appointments={appointments} meds={meds} doses={doses} />;
+        return <Calendar appointments={appointments} meds={meds} doses={doses} onToggleDose={handleToggleDose} />;
       case 'settings':
         return <Settings 
           settings={settings} 

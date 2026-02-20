@@ -8,7 +8,7 @@ interface Props {
   doses: DoseEvent[];
   appointments: Appointment[];
   settings: AppSettings;
-  onToggleDose: (id: string, medicationId?: string, time?: string) => void;
+  onToggleDose: (id: string, medicationId?: string, time?: string, date?: string) => void;
   onEditMed: (med: Medication) => void;
   onUpdateSettings: (settings: AppSettings) => void;
   onDeleteAppointment?: (id: string) => void;
@@ -19,6 +19,11 @@ interface Props {
 const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onToggleDose, onEditMed, onUpdateSettings, onDeleteAppointment, onEditAppointment, onAddMed }) => {
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
   const [showPrnSelector, setShowPrnSelector] = useState(false);
+  const [selectedPrnMed, setSelectedPrnMed] = useState<Medication | null>(null);
+  const [prnStep, setPrnStep] = useState<'list' | 'choice' | 'custom'>('list');
+  const [customPrnDate, setCustomPrnDate] = useState(new Date().toLocaleDateString('en-CA'));
+  const [customPrnTime, setCustomPrnTime] = useState(`${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`);
+
   const today = new Date();
   const now = new Date();
   today.setHours(0, 0, 0, 0);
@@ -30,11 +35,24 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
   const prnMeds = useMemo(() => meds.filter(m => m.usageCategory === 'prn'), [meds]);
 
-  const handlePrnDose = (medId: string) => {
+  const handlePrnDose = (medId: string, date?: string, time?: string) => {
     const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    onToggleDose(Math.random().toString(36).substr(2, 9), medId, timeStr);
+    const finalDate = date || now.toLocaleDateString('en-CA');
+    const finalTime = time || `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    // Usar um ID temporário que NÃO seja aleatório se estivermos tentando encontrar um registro existente
+    // No caso de PRN, sempre queremos criar um novo se não passarmos um ID real.
+    // O problema de duplicidade geralmente ocorre se o onToggleDose for disparado por múltiplos eventos.
+    onToggleDose(Math.random().toString(36).substr(2, 9), medId, finalTime, finalDate);
+    resetPrnFlow();
+  };
+
+  const resetPrnFlow = () => {
     setShowPrnSelector(false);
+    setSelectedPrnMed(null);
+    setPrnStep('list');
+    setCustomPrnDate(new Date().toLocaleDateString('en-CA'));
+    setCustomPrnTime(`${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`);
   };
 
   const isExpired = (med: Medication) => {
@@ -93,7 +111,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
     const todayStr = today.toLocaleDateString('en-CA');
 
       // Adiciona cada horário configurado à agenda
-      (med.times || []).forEach(time => {
+      (med.times || []).forEach((time, index) => {
         // Busca se já existe um registro de dose tomada/atrasada para este med e horário hoje
         const existingDose = doses.find(d => d.medicationId === med.id && d.scheduledTime === time && d.date === todayStr);
         
@@ -111,7 +129,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
         }
         
         schedule.push({
-          id: existingDose?.id || `virtual-${med.id}-${time}`,
+          id: existingDose?.id || `virtual-${med.id}-${time}-${index}`,
           med,
           time,
           status: finalStatus
@@ -383,44 +401,129 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
               ) : (
                 <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Selecione o medicamento</span>
-                    <button onClick={() => setShowPrnSelector(false)} className="text-slate-400 hover:text-slate-600">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                      {prnStep === 'list' ? 'Selecione o medicamento' : 
+                       prnStep === 'choice' ? 'Quando você tomou?' : 
+                       'Escolha data e hora'}
+                    </span>
+                    <button onClick={resetPrnFlow} className="text-slate-400 hover:text-slate-600">
                       <XCircle size={18} />
                     </button>
                   </div>
                   
-                  <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                    {prnMeds.map(med => (
+                  {prnStep === 'list' && (
+                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                      {prnMeds.map(med => (
+                        <button
+                          key={med.id}
+                          onClick={() => {
+                            setSelectedPrnMed(med);
+                            setPrnStep('choice');
+                          }}
+                          className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-purple-50 rounded-xl transition-colors text-left group"
+                        >
+                          <div className={`w-8 h-8 rounded-lg ${med.color} text-white flex items-center justify-center shrink-0`}>
+                            <Pill size={16} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-bold text-slate-700 text-sm group-hover:text-purple-700">{med.name}</div>
+                            <div className="text-[10px] text-slate-400">{med.dosage}</div>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-300 group-hover:text-purple-400" />
+                        </button>
+                      ))}
+                      
                       <button
-                        key={med.id}
-                        onClick={() => handlePrnDose(med.id)}
-                        className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-purple-50 rounded-xl transition-colors text-left group"
+                        onClick={() => onAddMed('prn')}
+                        className="flex items-center gap-3 p-3 border-2 border-dashed border-slate-100 hover:border-purple-200 hover:bg-purple-50/30 rounded-xl transition-all text-left group"
                       >
-                        <div className={`w-8 h-8 rounded-lg ${med.color} text-white flex items-center justify-center shrink-0`}>
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center shrink-0 group-hover:bg-purple-100 group-hover:text-purple-500">
                           <Pill size={16} />
                         </div>
                         <div className="flex-1">
-                          <div className="font-bold text-slate-700 text-sm group-hover:text-purple-700">{med.name}</div>
-                          <div className="text-[10px] text-slate-400">{med.dosage}</div>
+                          <div className="font-bold text-slate-500 text-sm group-hover:text-purple-700">Cadastrar novo remédio SN</div>
+                          <div className="text-[10px] text-slate-400">Remédio de uso eventual</div>
                         </div>
                         <ChevronRight size={16} className="text-slate-300 group-hover:text-purple-400" />
                       </button>
-                    ))}
-                    
-                    <button
-                      onClick={() => onAddMed('prn')}
-                      className="flex items-center gap-3 p-3 border-2 border-dashed border-slate-100 hover:border-purple-200 hover:bg-purple-50/30 rounded-xl transition-all text-left group"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center shrink-0 group-hover:bg-purple-100 group-hover:text-purple-500">
-                        <Pill size={16} />
+                    </div>
+                  )}
+
+                  {prnStep === 'choice' && selectedPrnMed && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-4">
+                        <div className={`w-10 h-10 rounded-lg ${selectedPrnMed.color} text-white flex items-center justify-center shrink-0`}>
+                          <Pill size={20} />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{selectedPrnMed.name}</div>
+                          <div className="text-[10px] text-slate-500">{selectedPrnMed.dosage}</div>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <div className="font-bold text-slate-500 text-sm group-hover:text-purple-700">Cadastrar novo remédio SN</div>
-                        <div className="text-[10px] text-slate-400">Remédio de uso eventual</div>
+                      
+                      <button
+                        onClick={() => handlePrnDose(selectedPrnMed.id)}
+                        className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                      >
+                        <ClockIcon size={18} />
+                        Tomei agora
+                      </button>
+                      
+                      <button
+                        onClick={() => setPrnStep('custom')}
+                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                      >
+                        <CalendarIcon size={18} />
+                        Outra data/horário
+                      </button>
+
+                      <button
+                        onClick={() => setPrnStep('list')}
+                        className="w-full py-2 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-slate-600"
+                      >
+                        Voltar
+                      </button>
+                    </div>
+                  )}
+
+                  {prnStep === 'custom' && selectedPrnMed && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
+                          <input 
+                            type="date" 
+                            value={customPrnDate}
+                            onChange={(e) => setCustomPrnDate(e.target.value)}
+                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora</label>
+                          <input 
+                            type="time" 
+                            value={customPrnTime}
+                            onChange={(e) => setCustomPrnTime(e.target.value)}
+                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all"
+                          />
+                        </div>
                       </div>
-                      <ChevronRight size={16} className="text-slate-300 group-hover:text-purple-400" />
-                    </button>
-                  </div>
+
+                      <button
+                        onClick={() => handlePrnDose(selectedPrnMed.id, customPrnDate, customPrnTime)}
+                        className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all shadow-lg shadow-purple-100"
+                      >
+                        Confirmar Registro
+                      </button>
+
+                      <button
+                        onClick={() => setPrnStep('choice')}
+                        className="w-full py-2 text-slate-400 text-[10px] font-black uppercase tracking-widest hover:text-slate-600"
+                      >
+                        Voltar
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

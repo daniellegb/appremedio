@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, List, Stethoscope, TestTubeDiagonal, Pill, Check, X, AlertCircle, BadgeCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, List, Stethoscope, TestTubeDiagonal, Pill, Check, X, AlertCircle, BadgeCheck, Info, ChevronDown, ChevronUp, CheckCircle2, Circle } from 'lucide-react';
 import { Appointment, Medication, DoseEvent } from '../types';
 
 type CalendarViewMode = 'monthly' | 'weekly';
@@ -9,12 +9,21 @@ interface Props {
   appointments: Appointment[];
   meds: Medication[];
   doses: DoseEvent[];
+  onToggleDose: (doseId: string, medicationId?: string, time?: string, date?: string) => void;
 }
 
-const Calendar: React.FC<Props> = ({ appointments, meds, doses }) => {
+const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewMode>('monthly');
+  const [showLegend, setShowLegend] = useState(() => {
+    const saved = localStorage.getItem('medmanager_calendar_legend');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('medmanager_calendar_legend', JSON.stringify(showLegend));
+  }, [showLegend]);
   
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -342,50 +351,64 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses }) => {
           })}
         </div>
 
-        {/* Legenda do Calendário */}
-        <div className="mt-8 pt-6 border-t border-slate-50 grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="space-y-2">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" /> Disponível
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <div className="w-2 h-2 rounded-full bg-red-500" /> Vencido
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <div className="w-2 h-2 rounded-full bg-slate-400" /> Sem estoque
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Consumo</div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <Check size={10} className="text-emerald-500" strokeWidth={3} /> Tomado
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <X size={10} className="text-slate-600" strokeWidth={3} /> Não tomado
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <BadgeCheck size={10} className="text-emerald-500" strokeWidth={3} /> Dose Eventual
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Compromissos</div>
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <div className="p-0.5 bg-blue-100 text-blue-600 rounded"><Stethoscope size={10} /></div> Consulta
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
-                <div className="p-0.5 bg-purple-100 text-purple-600 rounded"><TestTubeDiagonal size={10} /></div> Exame
-              </div>
-            </div>
-          </div>
+        {/* Botão para Ocultar/Mostrar Legenda */}
+        <div className="mt-6 flex justify-end">
+          <button 
+            onClick={() => setShowLegend(!showLegend)}
+            className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 transition-colors"
+          >
+            <Info size={12} />
+            {showLegend ? 'Ocultar Legenda' : 'Mostrar Legenda'}
+            {showLegend ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
         </div>
+
+        {/* Legenda do Calendário */}
+        {showLegend && (
+          <div className="mt-4 pt-6 border-t border-slate-50 grid grid-cols-3 gap-2 sm:gap-6">
+            <div className="space-y-2">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shrink-0" /> <span className="truncate">Disponível</span>
+                </div>
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-500 shrink-0" /> <span className="truncate">Vencido</span>
+                </div>
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-slate-400 shrink-0" /> <span className="truncate">Sem estoque</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Consumo</div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <Check size={10} className="text-emerald-500 shrink-0" strokeWidth={3} /> <span className="truncate">Tomado</span>
+                </div>
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <X size={10} className="text-slate-600 shrink-0" strokeWidth={3} /> <span className="truncate">Não tomado</span>
+                </div>
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <BadgeCheck size={10} className="text-emerald-500 shrink-0" strokeWidth={3} /> <span className="truncate">Eventual</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Compromissos</div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <div className="p-0.5 bg-blue-100 text-blue-600 rounded shrink-0"><Stethoscope size={10} /></div> <span className="truncate">Consulta</span>
+                </div>
+                <div className="flex items-center gap-2 text-[9px] sm:text-[11px] text-slate-500 font-medium">
+                  <div className="p-0.5 bg-purple-100 text-purple-600 rounded shrink-0"><TestTubeDiagonal size={10} /></div> <span className="truncate">Exame</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white text-slate-900 p-8 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden">
@@ -401,32 +424,48 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses }) => {
           {getMedsForDate(selectedDate).length > 0 && (
             <div className="space-y-2">
               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Medicamentos</div>
-              {getMedsForDate(selectedDate).map(med => (
-                <div key={med.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 hover:bg-slate-100 transition-colors cursor-pointer group">
-                  <div className={`w-12 h-12 rounded-2xl ${med.color || 'bg-slate-500'} flex items-center justify-center text-white shadow-lg relative`}>
-                    <Pill size={20} />
-                    {/* Indicador de status/consumo na agenda */}
-                    <div className={`absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white ${
-                      med.indicator.type === 'status' ? med.indicator.color : 'bg-slate-100'
-                    }`}>
-                      {med.indicator.type === 'consumption' && med.indicator.icon && (
-                        <div className={med.indicator.color}>
-                          <med.indicator.icon size={12} strokeWidth={3} />
+              {getMedsForDate(selectedDate).map(med => {
+                const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+                
+                return (
+                  <div key={med.id} className="flex flex-col gap-2">
+                    {med.times?.map((time, index) => {
+                      const dose = doses.find(d => d.medicationId === med.id && d.scheduledTime === time && d.date === dateStr);
+                      const isTaken = dose?.status === 'taken';
+                      const doseId = dose?.id || `virtual-${med.id}-${time}-${dateStr}-${index}`;
+
+                      return (
+                        <div key={doseId} className="flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 hover:bg-slate-100 transition-colors group">
+                          <div className={`w-12 h-12 rounded-2xl ${med.color || 'bg-slate-500'} flex items-center justify-center text-white shadow-lg relative shrink-0`}>
+                            <Pill size={20} />
+                            <div className="absolute -bottom-1 -right-1 bg-white text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-sm border border-slate-100">
+                              {time}
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-900 truncate">{med.name}</div>
+                            <div className="text-xs text-slate-500 truncate">{med.dosage}</div>
+                          </div>
+                          <div className={`text-[10px] font-black uppercase tracking-widest shrink-0 ${
+                            isTaken ? 'text-emerald-500' : 'text-slate-300'
+                          }`}>
+                            {isTaken ? 'Tomado' : 'Não tomado'}
+                          </div>
+                          <button 
+                            onClick={() => onToggleDose(doseId, med.id, time, dateStr)}
+                            className={`transition-all active:scale-90 shrink-0 ${
+                              isTaken ? 'text-emerald-500' : 'text-slate-200 hover:text-blue-500'
+                            }`}
+                            title={isTaken ? "Marcar como não tomado" : "Marcar como tomado"}
+                          >
+                            {isTaken ? <CheckCircle2 size={28} /> : <Circle size={28} />}
+                          </button>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{med.name}</div>
-                    <div className="text-xs text-slate-500">{med.dosage} • {med.times?.join(', ')}</div>
-                  </div>
-                  <div className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg ${
-                    med.indicator.type === 'status' ? 'bg-slate-100 text-slate-400' : 'bg-white shadow-sm ' + med.indicator.color
-                  }`}>
-                    {med.indicator.label}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
