@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, List, Stethoscope, TestTubeDiagonal, Pill, Check, X, AlertCircle, BadgeCheck, Info, ChevronDown, ChevronUp, CheckCircle2, Circle } from 'lucide-react';
 import { Appointment, Medication, DoseEvent } from '../types';
 import { isOutOfStockOnDate } from '../src/domain/stock';
+import { isPastDate, isFutureDate, isTodayDate, getCalendarDisplayMode } from '../src/domain/calendarRules';
 
 type CalendarViewMode = 'monthly' | 'weekly';
 
@@ -46,17 +47,14 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
   };
 
   const getMedsForDate = (date: Date) => {
-    const dateAtMidnight = new Date(date);
-    dateAtMidnight.setHours(0, 0, 0, 0);
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const now = new Date();
     const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const dateStr = `${dateAtMidnight.getFullYear()}-${String(dateAtMidnight.getMonth() + 1).padStart(2, '0')}-${String(dateAtMidnight.getDate()).padStart(2, '0')}`;
+    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-    const isPastDate = dateAtMidnight < today;
-    const isFutureDate = dateAtMidnight > today;
-    const isTodayDate = dateAtMidnight.getTime() === today.getTime();
+    const isPast = isPastDate(date, today);
+    const isFuture = isFutureDate(date, today);
+    const isToday = isTodayDate(date, today);
 
     return meds.filter(med => {
       // Se for PRN, só exibe se houver dose registrada para esta data
@@ -71,6 +69,9 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
 
       const startAtMidnight = new Date(startDate);
       startAtMidnight.setHours(0,0,0,0);
+
+      const dateAtMidnight = new Date(date);
+      dateAtMidnight.setHours(0,0,0,0);
 
       if (dateAtMidnight < startAtMidnight) return false;
       
@@ -94,13 +95,40 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
         ? doses.filter(d => d.medicationId === med.id && d.date === dateStr).map(d => d.scheduledTime).sort()
         : (med.times || []);
 
-      if (isFutureDate) {
-        // Regra de Futuro: Status do medicamento projetado para a data
-        const expiry = med.expiryDate ? new Date(med.expiryDate + 'T23:59:59') : null;
-        const isExpiredOnDate = expiry && expiry < dateAtMidnight;
+      const medDoses = displayTimes.map(time => {
+        const dose = doses.find(d => d.medicationId === med.id && d.scheduledTime === time && d.date === dateStr);
+        return { time, dose };
+      });
 
-        // Cálculo de projeção de estoque usando o domínio
-        const isOutOfStock = isOutOfStockOnDate(med, dateAtMidnight, today);
+      // Verificação de status de consumo
+      let hasMissed = false;
+      let hasTaken = false;
+      let hasPendingPast = false;
+
+      medDoses.forEach(({ time, dose }) => {
+        if (dose?.status === 'taken') {
+          hasTaken = true;
+        } else if (dose?.status === 'missed') {
+          hasMissed = true;
+        } else {
+          // Pending
+          if (isPast || (isToday && time < currentTimeStr)) {
+            hasPendingPast = true;
+          }
+        }
+      });
+
+      const displayMode = getCalendarDisplayMode({
+        date,
+        today,
+        hasActivity: hasTaken || hasMissed || hasPendingPast,
+        isPrn: med.usageCategory === 'prn'
+      });
+
+      if (displayMode === 'STATUS') {
+        const expiry = med.expiryDate ? new Date(med.expiryDate + 'T23:59:59') : null;
+        const isExpiredOnDate = expiry && (isFuture ? expiry < new Date(date.getTime()) : expiry < now);
+        const isOutOfStock = isFuture ? isOutOfStockOnDate(med, date, today) : med.currentStock <= 0;
 
         if (isExpiredOnDate) {
           indicator = { type: 'status', color: 'bg-red-500', label: 'Vencido' };
@@ -110,30 +138,6 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
           indicator = { type: 'status', color: 'bg-emerald-500', label: 'Disponível' };
         }
       } else {
-        // Regra de Passado/Hoje: Registro de consumo
-        const medDoses = displayTimes.map(time => {
-          const dose = doses.find(d => d.medicationId === med.id && d.scheduledTime === time && d.date === dateStr);
-          return { time, dose };
-        });
-
-        // Verificação de status de consumo
-        let hasMissed = false;
-        let hasTaken = false;
-        let hasPendingPast = false;
-
-        medDoses.forEach(({ time, dose }) => {
-          if (dose?.status === 'taken') {
-            hasTaken = true;
-          } else if (dose?.status === 'missed') {
-            hasMissed = true;
-          } else {
-            // Pending
-            if (isPastDate || (isTodayDate && time < currentTimeStr)) {
-              hasPendingPast = true;
-            }
-          }
-        });
-
         if (med.usageCategory === 'prn') {
           indicator = { type: 'consumption', color: 'text-emerald-500', icon: BadgeCheck, label: 'Dose Eventual' };
         } else if (hasMissed) {
@@ -142,14 +146,6 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
           indicator = { type: 'consumption', color: 'text-slate-600', icon: X, label: 'Não tomado' };
         } else if (hasTaken) {
           indicator = { type: 'consumption', color: 'text-emerald-500', icon: Check, label: 'Tomado' };
-        } else if (isTodayDate) {
-          // Se hoje e nada aconteceu ainda, mostra status atual
-          const expiry = med.expiryDate ? new Date(med.expiryDate + 'T23:59:59') : null;
-          const isExpiredNow = expiry && expiry < now;
-          const isOutOfStockNow = med.currentStock <= 0;
-          if (isExpiredNow) indicator = { type: 'status', color: 'bg-red-500', label: 'Vencido' };
-          else if (isOutOfStockNow) indicator = { type: 'status', color: 'bg-slate-400', label: 'Acabado' };
-          else indicator = { type: 'status', color: 'bg-emerald-500', label: 'Disponível' };
         }
       }
 
