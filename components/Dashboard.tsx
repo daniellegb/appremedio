@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from '../types';
 import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil } from 'lucide-react';
+import { calculateDaysOfStockLeft } from '../src/domain/stock';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface Props {
@@ -153,19 +154,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
   // Lógica de Alertas de estoque e validade
   const getMedAlerts = () => {
     return meds.map(med => {
-      let dosesPerDay = 1;
-      const timesCount = med.times?.length || 1;
-      const interval = med.intervalDays || 1;
-
-      switch (med.usageCategory) {
-        case 'continuous':
-        case 'period': dosesPerDay = timesCount / interval; break;
-        case 'intervals': dosesPerDay = 1 / interval; break;
-        case 'prn': dosesPerDay = 0; break;
-        default: dosesPerDay = 1;
-      }
-
-      const daysStockLeft = dosesPerDay > 0 ? Math.floor(med.currentStock / dosesPerDay) : null;
+      const daysStockLeft = calculateDaysOfStockLeft(med);
       
       const todayDate = new Date();
       todayDate.setHours(0,0,0,0);

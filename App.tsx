@@ -11,6 +11,8 @@ import ConfirmationModal from './components/ConfirmationModal';
 import { ViewType, Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from './types';
 import { INITIAL_MEDS, INITIAL_APPOINTMENTS, INITIAL_DOSES, COLORS } from './constants';
 
+import { calculateDosesPerDay, calculateDaysOfStockLeft, projectStockOnDate, isOutOfStockOnDate, getUpdatedStock } from './src/domain/stock';
+
 const STORAGE_KEYS = {
   APPOINTMENTS: 'medmanager_v2_appointments',
   MEDS: 'medmanager_v2_meds',
@@ -197,7 +199,7 @@ const App: React.FC = () => {
           // Atualiza estoque (devolve 1)
           setMeds(currentMeds => currentMeds.map(m => 
             m.id === currentDose.medicationId 
-              ? { ...m, currentStock: m.currentStock + 1 } 
+              ? { ...m, currentStock: getUpdatedStock(m.currentStock, 'pending') } 
               : m
           ));
           return prev.filter((_, i) => i !== existingIndex);
@@ -206,7 +208,7 @@ const App: React.FC = () => {
         // Atualiza estoque baseado na mudança de status para meds regulares
         setMeds(currentMeds => currentMeds.map(m => 
           m.id === currentDose.medicationId 
-            ? { ...m, currentStock: Math.max(0, m.currentStock + (newStatus === 'taken' ? -1 : 1)) } 
+            ? { ...m, currentStock: getUpdatedStock(m.currentStock, newStatus) } 
             : m
         ));
 
@@ -225,7 +227,7 @@ const App: React.FC = () => {
         // Reduz o estoque ao marcar como tomado
         setMeds(currentMeds => currentMeds.map(m => 
           m.id === medicationId 
-            ? { ...m, currentStock: Math.max(0, m.currentStock - 1) } 
+            ? { ...m, currentStock: getUpdatedStock(m.currentStock, 'taken') } 
             : m
         ));
 

@@ -2,6 +2,7 @@
 import React from 'react';
 import { Medication, AppSettings } from '../types';
 import { Plus, Trash2, Pill, AlertTriangle, CalendarDays, CheckCircle2, AlertCircle, XCircle, Clock, Info, Pencil } from 'lucide-react';
+import { calculateDaysOfStockLeft } from '../src/domain/stock';
 
 interface Props {
   meds: Medication[];
@@ -13,36 +14,8 @@ interface Props {
 
 const Medications: React.FC<Props> = ({ meds, settings, onAdd, onEdit, onDelete }) => {
   
-  // Calcula quantos dias o estoque vai durar com base no consumo diário
-  const getDaysOfStockLeft = (med: Medication): number | null => {
-    if (med.currentStock <= 0) return 0;
-    
-    let dosesPerDay = 1; // Default
-    const timesCount = med.times?.length || 1;
-    const interval = med.intervalDays || 1;
-
-    switch (med.usageCategory) {
-      case 'continuous':
-      case 'period':
-        dosesPerDay = timesCount / interval;
-        break;
-      case 'intervals':
-        dosesPerDay = 1 / interval;
-        break;
-      case 'contraceptive':
-        dosesPerDay = 1; // Ciclo padrão
-        break;
-      case 'prn':
-        return null; // Impossível prever "se necessário"
-      default:
-        dosesPerDay = 1;
-    }
-
-    return Math.floor(med.currentStock / dosesPerDay);
-  };
-
   const getStockStatus = (med: Medication) => {
-    const daysLeft = getDaysOfStockLeft(med);
+    const daysLeft = calculateDaysOfStockLeft(med);
 
     if (med.currentStock <= 0) {
       return { label: 'Esgotado', color: 'text-slate-400', bg: 'bg-slate-100', icon: AlertCircle };

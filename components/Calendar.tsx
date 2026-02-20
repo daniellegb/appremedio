@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LayoutGrid, List, Stethoscope, TestTubeDiagonal, Pill, Check, X, AlertCircle, BadgeCheck, Info, ChevronDown, ChevronUp, CheckCircle2, Circle } from 'lucide-react';
 import { Appointment, Medication, DoseEvent } from '../types';
+import { isOutOfStockOnDate } from '../src/domain/stock';
 
 type CalendarViewMode = 'monthly' | 'weekly';
 
@@ -98,24 +99,12 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
         const expiry = med.expiryDate ? new Date(med.expiryDate + 'T23:59:59') : null;
         const isExpiredOnDate = expiry && expiry < dateAtMidnight;
 
-        // Cálculo de projeção de estoque
-        let dosesPerDay = 1;
-        const timesCount = med.times?.length || 1;
-        const interval = med.intervalDays || 1;
-        switch (med.usageCategory) {
-          case 'continuous':
-          case 'period': dosesPerDay = timesCount / interval; break;
-          case 'intervals': dosesPerDay = 1 / interval; break;
-          default: dosesPerDay = 1;
-        }
-
-        const daysFromToday = Math.floor((dateAtMidnight.getTime() - today.getTime()) / (1000 * 3600 * 24));
-        const projectedDosesConsumed = daysFromToday * dosesPerDay;
-        const isOutOfStockOnDate = (med.currentStock - projectedDosesConsumed) <= 0;
+        // Cálculo de projeção de estoque usando o domínio
+        const isOutOfStock = isOutOfStockOnDate(med, dateAtMidnight, today);
 
         if (isExpiredOnDate) {
           indicator = { type: 'status', color: 'bg-red-500', label: 'Vencido' };
-        } else if (isOutOfStockOnDate) {
+        } else if (isOutOfStock) {
           indicator = { type: 'status', color: 'bg-slate-400', label: 'Acabado' };
         } else {
           indicator = { type: 'status', color: 'bg-emerald-500', label: 'Disponível' };
