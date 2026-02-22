@@ -5,6 +5,7 @@ import { Appointment, Medication, DoseEvent } from '../types';
 import { isOutOfStockOnDate } from '../src/domain/stock';
 import { isPastDate, isFutureDate, isTodayDate, getCalendarDisplayMode } from '../src/domain/calendarRules';
 import { isMedicationExpired, hasStock } from '../src/domain/medicationRules';
+import ConfirmationModal from './ConfirmationModal';
 
 type CalendarViewMode = 'monthly' | 'weekly';
 
@@ -13,12 +14,24 @@ interface Props {
   meds: Medication[];
   doses: DoseEvent[];
   onToggleDose: (doseId: string, medicationId?: string, time?: string, date?: string) => void;
+  onEditMed: (med: Medication) => void;
 }
 
-const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) => {
+const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, onEditMed }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewMode>('monthly');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    doseId: string;
+    medicationId?: string;
+    time?: string;
+    date?: string;
+  }>({ isOpen: false, doseId: '' });
+  const [outOfStockModal, setOutOfStockModal] = useState<{
+    isOpen: boolean;
+    med: Medication | null;
+  }>({ isOpen: false, med: null });
   const [showLegend, setShowLegend] = useState(() => {
     const saved = localStorage.getItem('medmanager_calendar_legend');
     return saved !== null ? JSON.parse(saved) : true;
@@ -216,6 +229,30 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
   };
 
   const calendarDays = viewMode === 'monthly' ? getMonthlyDays() : getWeeklyDays();
+
+  const handleToggleDose = (doseId: string, medicationId?: string, time?: string, date?: string) => {
+    const med = meds.find(m => m.id === medicationId);
+    const dose = doses.find(d => d.id === doseId);
+    const isTaken = dose?.status === 'taken';
+
+    // Check stock if trying to mark as taken
+    if (!isTaken && med && med.currentStock <= 0) {
+      setOutOfStockModal({ isOpen: true, med });
+      return;
+    }
+
+    if (med?.usageCategory === 'prn' && isTaken) {
+      setConfirmModal({
+        isOpen: true,
+        doseId,
+        medicationId,
+        time,
+        date
+      });
+    } else {
+      onToggleDose(doseId, medicationId, time, date);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20 md:pb-0">
@@ -437,7 +474,7 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
                             {isTaken ? 'Tomado' : 'Não tomado'}
                           </div>
                           <button 
-                            onClick={() => onToggleDose(doseId, med.id, time, dateStr)}
+                            onClick={() => handleToggleDose(doseId, med.id, time, dateStr)}
                             className={`transition-all active:scale-90 shrink-0 ${
                               isTaken ? 'text-emerald-500' : 'text-slate-200 hover:text-blue-500'
                             }`}
@@ -477,6 +514,34 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose }) 
           </div>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title="Desmarcar Dose Eventual?"
+        message="Você tem certeza que deseja desmarcar esta dose eventual (SN)? Esta ação removerá o registro de consumo."
+        confirmText="Sim, desmarcar"
+        cancelText="Manter tomado"
+        variant="warning"
+        onConfirm={() => {
+          onToggleDose(confirmModal.doseId, confirmModal.medicationId, confirmModal.time, confirmModal.date);
+          setConfirmModal({ ...confirmModal, isOpen: false });
+        }}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
+
+      <ConfirmationModal
+        isOpen={outOfStockModal.isOpen}
+        title="Medicamento sem estoque"
+        message="Este medicamento está sem estoque. Adicione novas unidades para registrar o consumo."
+        confirmText="Editar medicamento"
+        cancelText="Cancelar"
+        variant="neutral"
+        onConfirm={() => {
+          if (outOfStockModal.med) onEditMed(outOfStockModal.med);
+          setOutOfStockModal({ isOpen: false, med: null });
+        }}
+        onCancel={() => setOutOfStockModal({ isOpen: false, med: null })}
+      />
     </div>
   );
 };

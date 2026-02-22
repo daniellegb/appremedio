@@ -281,6 +281,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
           <div className="space-y-3">
             {todaySchedule.map((item) => {
               const expired = isMedicationExpired(item.med.expiryDate, today);
+              const outOfStock = item.med.currentStock <= 0;
               return (
                 <div 
                   key={item.id} 
@@ -290,7 +291,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
                       : item.status === 'missed' 
                         ? 'border-amber-100 bg-amber-50/10'
                         : 'border-slate-100 shadow-md'
-                  } ${expired ? 'border-amber-100 bg-amber-50/10' : ''}`}
+                  } ${expired ? 'border-amber-100 bg-amber-50/10' : ''} ${outOfStock ? 'border-slate-200 bg-slate-50/50' : ''}`}
                 >
                   <div className="flex items-center gap-4">
                     <div className={`text-sm font-black w-12 text-center ${item.status === 'missed' ? 'text-amber-500' : 'text-slate-400'}`}>
@@ -312,20 +313,26 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
                             Vencido
                           </span>
                         )}
+                        {outOfStock && (
+                          <span className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded shadow-sm">
+                            <AlertCircle size={10} />
+                            Acabou
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500 font-medium">Dose: {item.med.dosage}</div>
                     </div>
                     <button 
                       type="button"
-                      disabled={expired}
-                      onClick={() => !expired && onToggleDose(item.id, item.med.id, item.time)}
+                      disabled={expired || outOfStock}
+                      onClick={() => !expired && !outOfStock && onToggleDose(item.id, item.med.id, item.time)}
                       className={`transition-all active:scale-90 ${
                         item.status === 'taken' 
                           ? 'text-emerald-500 scale-110' 
                           : item.status === 'missed'
                             ? 'text-amber-300 hover:text-amber-500'
                             : 'text-slate-200 hover:text-blue-500'
-                      } ${expired ? 'opacity-30 cursor-not-allowed' : ''}`}
+                      } ${expired || outOfStock ? 'opacity-30 cursor-not-allowed' : ''}`}
                     >
                       {item.status === 'taken' ? <CheckCircle2 size={32} /> : <Circle size={32} />}
                     </button>
@@ -346,6 +353,22 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
                       </button>
                     </div>
                   )}
+
+                  {outOfStock && !expired && (
+                    <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 animate-in fade-in zoom-in-95">
+                      <p className="text-[10px] text-slate-600 font-bold leading-relaxed flex items-start gap-2">
+                        <AlertCircle size={14} className="shrink-0 text-slate-400" />
+                        <span>Este medicamento está sem estoque. Adicione novas unidades para registrar o consumo.</span>
+                      </p>
+                      <button 
+                        type="button"
+                        onClick={() => onEditMed(item.med)}
+                        className="w-full py-2 bg-slate-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-600 transition-colors shadow-sm"
+                      >
+                        Editar medicamento
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -359,7 +382,7 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
           </div>
         </section>
 
-        <div className="space-y-8">
+        <div className="space-y-8 xl:row-span-2">
           {/* Registro de Dose Eventual */}
           <section>
             <div className="flex items-center justify-between mb-5">
@@ -392,25 +415,33 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
                   
                   {prnStep === 'list' && (
                     <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                      {prnMeds.map(med => (
-                        <button
-                          key={med.id}
-                          onClick={() => {
-                            setSelectedPrnMed(med);
-                            setPrnStep('choice');
-                          }}
-                          className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-purple-50 rounded-xl transition-colors text-left group"
-                        >
-                          <div className={`w-8 h-8 rounded-lg ${med.color} text-white flex items-center justify-center shrink-0`}>
-                            <Pill size={16} />
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-bold text-slate-700 text-sm group-hover:text-purple-700">{med.name}</div>
-                            <div className="text-[10px] text-slate-400">{med.dosage}</div>
-                          </div>
-                          <ChevronRight size={16} className="text-slate-300 group-hover:text-purple-400" />
-                        </button>
-                      ))}
+                      {prnMeds.map(med => {
+                        const outOfStock = med.currentStock <= 0;
+                        return (
+                          <button
+                            key={med.id}
+                            onClick={() => {
+                              setSelectedPrnMed(med);
+                              setPrnStep('choice');
+                            }}
+                            className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-purple-50 rounded-xl transition-colors text-left group"
+                          >
+                            <div className={`w-8 h-8 rounded-lg ${med.color} text-white flex items-center justify-center shrink-0`}>
+                              <Pill size={16} />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <div className="font-bold text-slate-700 text-sm group-hover:text-purple-700">{med.name}</div>
+                                {outOfStock && (
+                                  <span className="text-[8px] font-black uppercase text-slate-500 bg-slate-200 px-1 rounded">Acabou</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400">{med.dosage}</div>
+                            </div>
+                            <ChevronRight size={16} className="text-slate-300 group-hover:text-purple-400" />
+                          </button>
+                        );
+                      })}
                       
                       <button
                         onClick={() => onAddMed('prn')}
@@ -440,21 +471,39 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
                         </div>
                       </div>
                       
-                      <button
-                        onClick={() => handlePrnDose(selectedPrnMed.id)}
-                        className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
-                      >
-                        <ClockIcon size={18} />
-                        Tomei agora
-                      </button>
-                      
-                      <button
-                        onClick={() => setPrnStep('custom')}
-                        className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
-                      >
-                        <CalendarIcon size={18} />
-                        Outra data/horário
-                      </button>
+                      {selectedPrnMed.currentStock <= 0 ? (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                          <p className="text-[10px] text-slate-600 font-bold leading-relaxed flex items-start gap-2">
+                            <AlertCircle size={14} className="shrink-0 text-slate-400" />
+                            <span>Este medicamento está sem estoque. Adicione novas unidades para registrar o consumo.</span>
+                          </p>
+                          <button 
+                            type="button"
+                            onClick={() => onEditMed(selectedPrnMed)}
+                            className="w-full py-2 bg-slate-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-600 transition-colors shadow-sm"
+                          >
+                            Editar medicamento
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handlePrnDose(selectedPrnMed.id)}
+                            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-bold hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+                          >
+                            <ClockIcon size={18} />
+                            Tomei agora
+                          </button>
+                          
+                          <button
+                            onClick={() => setPrnStep('custom')}
+                            className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-all flex items-center justify-center gap-2"
+                          >
+                            <CalendarIcon size={18} />
+                            Outra data/horário
+                          </button>
+                        </>
+                      )}
 
                       <button
                         onClick={() => setPrnStep('list')}
@@ -467,33 +516,51 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
                   {prnStep === 'custom' && selectedPrnMed && (
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
-                          <input 
-                            type="date" 
-                            value={customPrnDate}
-                            onChange={(e) => setCustomPrnDate(e.target.value)}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all"
-                          />
+                      {selectedPrnMed.currentStock <= 0 ? (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                          <p className="text-[10px] text-slate-600 font-bold leading-relaxed flex items-start gap-2">
+                            <AlertCircle size={14} className="shrink-0 text-slate-400" />
+                            <span>Este medicamento está sem estoque. Adicione novas unidades para registrar o consumo.</span>
+                          </p>
+                          <button 
+                            type="button"
+                            onClick={() => onEditMed(selectedPrnMed)}
+                            className="w-full py-2 bg-slate-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-600 transition-colors shadow-sm"
+                          >
+                            Editar medicamento
+                          </button>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora</label>
-                          <input 
-                            type="time" 
-                            value={customPrnTime}
-                            onChange={(e) => setCustomPrnTime(e.target.value)}
-                            className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all"
-                          />
-                        </div>
-                      </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data</label>
+                              <input 
+                                type="date" 
+                                value={customPrnDate}
+                                onChange={(e) => setCustomPrnDate(e.target.value)}
+                                className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Hora</label>
+                              <input 
+                                type="time" 
+                                value={customPrnTime}
+                                onChange={(e) => setCustomPrnTime(e.target.value)}
+                                className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none transition-all"
+                              />
+                            </div>
+                          </div>
 
-                      <button
-                        onClick={() => handlePrnDose(selectedPrnMed.id, customPrnDate, customPrnTime)}
-                        className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all shadow-lg shadow-purple-100"
-                      >
-                        Confirmar Registro
-                      </button>
+                          <button
+                            onClick={() => handlePrnDose(selectedPrnMed.id, customPrnDate, customPrnTime)}
+                            className="w-full py-4 bg-purple-600 text-white rounded-2xl font-bold hover:bg-purple-700 transition-all shadow-lg shadow-purple-100"
+                          >
+                            Confirmar Registro
+                          </button>
+                        </>
+                      )}
 
                       <button
                         onClick={() => setPrnStep('choice')}
@@ -546,146 +613,147 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
             </div>
           </section>
 
-          {/* Próximas Consultas */}
-          <section>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <CalendarIcon size={22} className="text-blue-500" /> Próximas Consultas
-              </h3>
-            </div>
-            <div className="space-y-4">
-              {upcomingAppointments.length > 0 ? upcomingAppointments.map(app => {
-                const isAppToday = app.date === todayDateStr;
-                const isExpanded = expandedAppId === app.id;
+        </div>
 
-                return (
-                  <div 
-                    key={app.id} 
-                    onClick={() => setExpandedAppId(isExpanded ? null : app.id)}
-                    className={`group flex flex-col bg-white p-5 rounded-[24px] border transition-all cursor-pointer shadow-md relative overflow-hidden ${
-                      isExpanded ? 'border-blue-300 ring-2 ring-blue-50' : 'border-slate-100 hover:border-blue-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm ${isExpanded ? 'bg-blue-600 text-white' : ''}`}>
-                        {app.type === 'Consulta' ? <Stethoscope size={24} /> : <TestTubeDiagonal size={24} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-bold text-slate-900 truncate text-base">{app.doctor}</div>
-                        {!isExpanded && (
-                          <div className="text-[11px] text-slate-500 font-medium">
-                            {app.specialty} • {app.date.split('-').reverse().join('/')} às {app.time}
-                          </div>
-                        )}
-                        {isAppToday && (
-                          <div className="mt-1">
-                            <span className="text-[9px] font-black uppercase tracking-tight text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg border border-blue-100 inline-block">
-                              {app.type === 'Consulta' ? 'Sua consulta é hoje!' : 'Seu exame é hoje!'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-slate-300">
-                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                      </div>
+        {/* Próximas Consultas */}
+        <section>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <CalendarIcon size={22} className="text-blue-500" /> Próximas Consultas
+            </h3>
+          </div>
+          <div className="space-y-4">
+            {upcomingAppointments.length > 0 ? upcomingAppointments.map(app => {
+              const isAppToday = app.date === todayDateStr;
+              const isExpanded = expandedAppId === app.id;
+
+              return (
+                <div 
+                  key={app.id} 
+                  onClick={() => setExpandedAppId(isExpanded ? null : app.id)}
+                  className={`group flex flex-col bg-white p-5 rounded-[24px] border transition-all cursor-pointer shadow-md relative overflow-hidden ${
+                    isExpanded ? 'border-blue-300 ring-2 ring-blue-50' : 'border-slate-100 hover:border-blue-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-sm ${isExpanded ? 'bg-blue-600 text-white' : ''}`}>
+                      {app.type === 'Consulta' ? <Stethoscope size={24} /> : <TestTubeDiagonal size={24} />}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-900 truncate text-base">{app.doctor}</div>
+                      {!isExpanded && (
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          {app.specialty} • {app.date.split('-').reverse().join('/')} às {app.time}
+                        </div>
+                      )}
+                      {isAppToday && (
+                        <div className="mt-1">
+                          <span className="text-[9px] font-black uppercase tracking-tight text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-lg border border-blue-100 inline-block">
+                            {app.type === 'Consulta' ? 'Sua consulta é hoje!' : 'Seu exame é hoje!'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-slate-300">
+                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </div>
+                  </div>
 
-                    {/* Conteúdo Expandido - Espelhando Appointments.tsx */}
-                    {isExpanded && (
-                      <div className="mt-6 pt-5 border-t border-slate-50 space-y-6 animate-in fade-in slide-in-from-top-2">
-                        <div className="flex flex-col gap-6">
-                          {/* Seção de Data e Hora */}
-                          <div className="flex gap-3">
-                            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
-                              <CalendarIcon size={18} />
-                            </div>
-                            <div className="flex flex-col justify-center">
-                              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Data e Hora</div>
-                              <div className="font-bold text-slate-700 text-sm whitespace-nowrap">
-                                {app.date.split('-').reverse().join('/')} • {app.time}
-                              </div>
-                            </div>
+                  {/* Conteúdo Expandido - Espelhando Appointments.tsx */}
+                  {isExpanded && (
+                    <div className="mt-6 pt-5 border-t border-slate-50 space-y-6 animate-in fade-in slide-in-from-top-2">
+                      <div className="flex flex-col gap-6">
+                        {/* Seção de Data e Hora */}
+                        <div className="flex gap-3">
+                          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
+                            <CalendarIcon size={18} />
                           </div>
-
-                          {/* Seção de Local */}
-                          {app.location && (
-                            <div className="flex gap-3">
-                              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
-                                <MapPin size={18} />
-                              </div>
-                              <div className="flex flex-col gap-3 min-w-0">
-                                <div className="flex flex-col justify-center">
-                                  <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Local</div>
-                                  <div className="font-bold text-slate-700 text-sm">{app.location}</div>
-                                </div>
-                                
-                                <div className="flex gap-2">
-                                  <button 
-                                    type="button"
-                                    onClick={(e) => openGoogleMaps(e, app.location)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-blue-600 hover:text-white transition-all border border-slate-100 hover:border-blue-600 shadow-sm"
-                                  >
-                                    <Map size={12} />
-                                    Google Maps
-                                  </button>
-                                  <button 
-                                    type="button"
-                                    onClick={(e) => openWaze(e, app.location)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-blue-600 hover:text-white transition-all border border-slate-100 hover:border-blue-600 shadow-sm"
-                                  >
-                                    <Navigation size={12} />
-                                    Waze
-                                  </button>
-                                </div>
-                              </div>
+                          <div className="flex flex-col justify-center">
+                            <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Data e Hora</div>
+                            <div className="font-bold text-slate-700 text-sm whitespace-nowrap">
+                              {app.date.split('-').reverse().join('/')} • {app.time}
                             </div>
-                          )}
-
-                          {/* Seção de Observações */}
-                          {app.notes && (
-                            <div className="flex gap-3 pt-2">
-                              <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
-                                <FileText size={18} />
-                              </div>
-                              <div className="flex flex-col justify-center">
-                                <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Observações</div>
-                                <div className="font-medium text-slate-600 text-xs leading-relaxed italic">{app.notes}</div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Ações: Edição e Exclusão para paridade com Appointments.tsx */}
-                          <div className="flex gap-3 pt-4 border-t border-slate-50">
-                            <button 
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); onEditAppointment?.(app); }}
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
-                            >
-                              <Pencil size={14} />
-                              Editar
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); onDeleteAppointment?.(app.id); }}
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 text-xs font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-100"
-                            >
-                              <Trash2 size={14} />
-                              Excluir
-                            </button>
                           </div>
                         </div>
+
+                        {/* Seção de Local */}
+                        {app.location && (
+                          <div className="flex gap-3">
+                            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
+                              <MapPin size={18} />
+                            </div>
+                            <div className="flex flex-col gap-3 min-w-0">
+                              <div className="flex flex-col justify-center">
+                                <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Local</div>
+                                <div className="font-bold text-slate-700 text-sm">{app.location}</div>
+                              </div>
+                              
+                              <div className="flex gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={(e) => openGoogleMaps(e, app.location)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-blue-600 hover:text-white transition-all border border-slate-100 hover:border-blue-600 shadow-sm"
+                                >
+                                  <Map size={12} />
+                                  Google Maps
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={(e) => openWaze(e, app.location)}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-blue-600 hover:text-white transition-all border border-slate-100 hover:border-blue-600 shadow-sm"
+                                >
+                                  <Navigation size={12} />
+                                  Waze
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Seção de Observações */}
+                        {app.notes && (
+                          <div className="flex gap-3 pt-2">
+                            <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
+                              <FileText size={18} />
+                            </div>
+                            <div className="flex flex-col justify-center">
+                              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Observações</div>
+                              <div className="font-medium text-slate-600 text-xs leading-relaxed italic">{app.notes}</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ações: Edição e Exclusão para paridade com Appointments.tsx */}
+                        <div className="flex gap-3 pt-4 border-t border-slate-50">
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onEditAppointment?.(app); }}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 text-xs font-bold rounded-xl hover:bg-blue-600 hover:text-white transition-all border border-blue-100"
+                          >
+                            <Pencil size={14} />
+                            Editar
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onDeleteAppointment?.(app.id); }}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 text-xs font-bold rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-100"
+                          >
+                            <Trash2 size={14} />
+                            Excluir
+                          </button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              }) : (
-                <div className="text-center py-10 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200 text-slate-400">
-                  Nenhum compromisso agendado
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </section>
-        </div>
+              );
+            }) : (
+              <div className="text-center py-10 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200 text-slate-400">
+                Nenhum compromisso agendado
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

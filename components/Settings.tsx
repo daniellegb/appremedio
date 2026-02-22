@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert } from 'lucide-react';
 import { AppSettings } from '../types';
+import { useAuth } from '../src/hooks/useAuth';
 
 interface Props {
   settings: AppSettings;
@@ -10,6 +10,16 @@ interface Props {
 }
 
 const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) => {
+  const { signOut, user } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Erro ao sair:", error);
+    }
+  };
+
   const sections = [
     { title: 'Conta', icon: User, items: ['Perfil', 'Privacidade', 'Segurança'] },
   ];
@@ -19,13 +29,13 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
       <header className="flex flex-col items-center py-6">
         <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-full p-1 shadow-xl shadow-blue-100 mb-4">
           <img 
-            src="https://picsum.photos/200" 
+            src={user?.user_metadata?.avatar_url || "https://picsum.photos/200"} 
             alt="Profile" 
             className="w-full h-full rounded-full object-cover border-4 border-white"
           />
         </div>
-        <h2 className="text-2xl font-bold">João Silva</h2>
-        <p className="text-slate-500">joao.silva@email.com</p>
+        <h2 className="text-2xl font-bold">{user?.user_metadata?.full_name || "Usuário"}</h2>
+        <p className="text-slate-500">{user?.email || "email@exemplo.com"}</p>
       </header>
 
       <div className="space-y-6">
@@ -130,7 +140,10 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
           </div>
         </div>
 
-        <button className="w-full flex items-center justify-center gap-2 px-6 py-4 text-slate-400 font-bold bg-slate-100 rounded-3xl hover:bg-slate-200 transition-colors">
+        <button 
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 px-6 py-4 text-slate-400 font-bold bg-slate-100 rounded-3xl hover:bg-slate-200 transition-colors"
+        >
           <LogOut size={20} />
           Sair do Aplicativo
         </button>

@@ -11,7 +11,7 @@ interface ConfirmationModalProps {
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
-  variant?: 'danger' | 'warning';
+  variant?: 'danger' | 'warning' | 'neutral';
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -47,7 +47,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             <div className="p-6 sm:p-8">
               <div className="flex justify-between items-start mb-6">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                  variant === 'danger' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+                  variant === 'danger' ? 'bg-red-50 text-red-600' : 
+                  variant === 'warning' ? 'bg-amber-50 text-amber-600' :
+                  'bg-slate-100 text-slate-600'
                 }`}>
                   <AlertTriangle size={24} />
                 </div>
@@ -80,7 +82,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                   className={`flex-1 px-6 py-3 text-white font-bold rounded-2xl transition-all shadow-lg ${
                     variant === 'danger' 
                       ? 'bg-red-600 hover:bg-red-700 shadow-red-100' 
-                      : 'bg-amber-600 hover:bg-amber-700 shadow-amber-100'
+                      : variant === 'warning'
+                        ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-100'
+                        : 'bg-slate-600 hover:bg-slate-700 shadow-slate-100'
                   }`}
                 >
                   {confirmText}
