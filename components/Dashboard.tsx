@@ -91,7 +91,10 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
       // Verifica se o medicamento está ativo hoje
       if (today < startDate) return;
-      if (endDate && today > endDate) return;
+      
+      // Para medicamentos "por período", não usamos a data final fixa, 
+      // pois as doses podem ser deslocadas para dias extras.
+      if (med.usageCategory !== 'period' && endDate && today > endDate) return;
 
       // Lógica de intervalo de dias
       if (med.usageCategory === 'continuous' || med.usageCategory === 'intervals') {
@@ -105,11 +108,12 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
       // Se for por período, usamos a lógica determinística de contagem de doses
       if (med.usageCategory === 'period') {
+        const sortedTimes = [...(med.times || [])].sort();
         const periodDoses = calculatePeriodDoses(
           med.startDate || '',
-          med.times || [],
-          med.durationDays || 0,
-          (med.times || []).length
+          (med.times || [])[0] || '',
+          sortedTimes,
+          (med.durationDays || 0) * sortedTimes.length
         );
         
         const todayDoses = periodDoses.filter(d => d.date === todayStr);

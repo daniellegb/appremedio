@@ -32,6 +32,10 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
     isOpen: boolean;
     med: Medication | null;
   }>({ isOpen: false, med: null });
+  const [expiredModal, setExpiredModal] = useState<{
+    isOpen: boolean;
+    med: Medication | null;
+  }>({ isOpen: false, med: null });
   const [showLegend, setShowLegend] = useState(() => {
     const saved = localStorage.getItem('medmanager_calendar_legend');
     return saved !== null ? JSON.parse(saved) : true;
@@ -89,7 +93,7 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
 
       if (dateAtMidnight < startAtMidnight) return false;
       
-      if (endDate) {
+      if (med.usageCategory !== 'period' && endDate) {
         const endAtMidnight = new Date(endDate);
         endAtMidnight.setHours(0,0,0,0);
         if (dateAtMidnight > endAtMidnight) return false;
@@ -97,11 +101,12 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
 
       // Se for por período, verificamos se a data está na lista de doses calculadas
       if (med.usageCategory === 'period') {
+        const sortedTimes = [...(med.times || [])].sort();
         const periodDoses = calculatePeriodDoses(
           med.startDate || '',
-          med.times || [],
-          med.durationDays || 0,
-          (med.times || []).length
+          (med.times || [])[0] || '',
+          sortedTimes,
+          (med.durationDays || 0) * sortedTimes.length
         );
         return periodDoses.some(d => d.date === dateStr);
       }
@@ -122,11 +127,12 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
 
       // Se for por período, filtramos os horários específicos para esta data
       if (med.usageCategory === 'period') {
+        const sortedTimes = [...(med.times || [])].sort();
         const periodDoses = calculatePeriodDoses(
           med.startDate || '',
-          med.times || [],
-          med.durationDays || 0,
-          (med.times || []).length
+          (med.times || [])[0] || '',
+          sortedTimes,
+          (med.durationDays || 0) * sortedTimes.length
         );
         displayTimes = periodDoses.filter(d => d.date === dateStr).map(d => d.time);
       }
@@ -257,10 +263,19 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
     const dose = doses.find(d => d.id === doseId);
     const isTaken = dose?.status === 'taken';
 
-    // Check stock if trying to mark as taken
-    if (!isTaken && med && med.currentStock <= 0) {
-      setOutOfStockModal({ isOpen: true, med });
-      return;
+    if (!isTaken && med) {
+      // Check expiration
+      const doseDate = date ? new Date(date + 'T12:00:00') : new Date();
+      if (isMedicationExpired(med.expiryDate, doseDate)) {
+        setExpiredModal({ isOpen: true, med });
+        return;
+      }
+
+      // Check stock
+      if (med.currentStock <= 0) {
+        setOutOfStockModal({ isOpen: true, med });
+        return;
+      }
     }
 
     if (med?.usageCategory === 'prn' && isTaken) {
@@ -477,17 +492,35 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
                       const dose = doses.find(d => d.medicationId === med.id && d.scheduledTime === time && d.date === dateStr);
                       const isTaken = dose?.status === 'taken';
                       const doseId = dose?.id || `virtual-${med.id}-${time}-${dateStr}-${index}`;
+                      const expired = isMedicationExpired(med.expiryDate, selectedDate);
+                      const outOfStock = med.currentStock <= 0;
 
                       return (
-                        <div key={doseId} className="flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 hover:bg-slate-100 transition-colors group">
-                          <div className={`w-12 h-12 rounded-2xl ${med.color || 'bg-slate-500'} flex items-center justify-center text-white shadow-lg relative shrink-0`}>
+                        <div key={doseId} className={`flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border transition-colors group ${
+                          expired || outOfStock ? 'border-amber-100 bg-amber-50/10' : 'border-slate-100 hover:bg-slate-100'
+                        }`}>
+                          <div className={`w-12 h-12 rounded-2xl ${med.color || 'bg-slate-500'} flex items-center justify-center text-white shadow-lg relative shrink-0 ${expired || outOfStock ? 'opacity-50' : ''}`}>
                             <Pill size={20} />
                             <div className="absolute -bottom-1 -right-1 bg-white text-slate-900 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-sm border border-slate-100">
                               {time}
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-bold text-slate-900 truncate">{med.name}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="font-bold text-slate-900 truncate">{med.name}</div>
+                              {expired && (
+                                <span className="flex items-center gap-1 text-[8px] font-black uppercase text-red-600 bg-red-100 px-1.5 py-0.5 rounded shadow-sm">
+                                  <AlertCircle size={10} />
+                                  Vencido
+                                </span>
+                              )}
+                              {outOfStock && !expired && (
+                                <span className="flex items-center gap-1 text-[8px] font-black uppercase text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded shadow-sm">
+                                  <AlertCircle size={10} />
+                                  Acabou
+                                </span>
+                              )}
+                            </div>
                             <div className="text-xs text-slate-500 truncate">{med.dosage}</div>
                           </div>
                           <div className={`text-[10px] font-black uppercase tracking-widest shrink-0 ${
@@ -497,9 +530,10 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
                           </div>
                           <button 
                             onClick={() => handleToggleDose(doseId, med.id, time, dateStr)}
+                            disabled={!isTaken && (expired || outOfStock)}
                             className={`transition-all active:scale-90 shrink-0 ${
                               isTaken ? 'text-emerald-500' : 'text-slate-200 hover:text-blue-500'
-                            }`}
+                            } ${!isTaken && (expired || outOfStock) ? 'opacity-30 cursor-not-allowed' : ''}`}
                             title={isTaken ? "Marcar como não tomado" : "Marcar como tomado"}
                           >
                             {isTaken ? <CheckCircle2 size={28} /> : <Circle size={28} />}
@@ -563,6 +597,20 @@ const Calendar: React.FC<Props> = ({ appointments, meds, doses, onToggleDose, on
           setOutOfStockModal({ isOpen: false, med: null });
         }}
         onCancel={() => setOutOfStockModal({ isOpen: false, med: null })}
+      />
+
+      <ConfirmationModal
+        isOpen={expiredModal.isOpen}
+        title="Medicamento vencido"
+        message="Não tome medicamentos vencidos! Edite o medicamento quando tiver reposto o estoque com um lote válido."
+        confirmText="Editar medicamento"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={() => {
+          if (expiredModal.med) onEditMed(expiredModal.med);
+          setExpiredModal({ isOpen: false, med: null });
+        }}
+        onCancel={() => setExpiredModal({ isOpen: false, med: null })}
       />
     </div>
   );

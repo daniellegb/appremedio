@@ -71,55 +71,38 @@ export interface ScheduledDose {
 
 /**
  * Calcula a distribuição de doses para medicamentos do tipo "por período".
- * A contagem é determinística e baseada na ordem circular dos horários cadastrados,
- * começando pelo primeiro horário da lista no dia de início.
+ * A distribuição é baseada na contagem real de doses a partir do primeiro horário cadastrado.
  */
 export const calculatePeriodDoses = (
   startDate: string,
+  startTime: string,
   times: string[],
-  durationDays: number,
-  frequency: number
+  totalDoses: number
 ): ScheduledDose[] => {
-  const totalDoses = frequency * durationDays;
   const doses: ScheduledDose[] = [];
-  
-  if (!startDate || !times || times.length === 0 || totalDoses <= 0) {
+  if (!startDate || !startTime || !times || times.length === 0 || totalDoses <= 0) {
     return doses;
   }
-
-  let currentDoses = 0;
-  // Usamos meio-dia para evitar problemas de fuso horário ao manipular apenas a data
-  const currentDate = new Date(startDate + 'T12:00:00');
-  let timeIndex = 0;
-  
-  while (currentDoses < totalDoses) {
-    const currentTime = times[timeIndex];
-    
-    // Lógica de avanço de dia baseada na ordem circular dos horários
-    if (timeIndex > 0) {
-      const prevTime = times[timeIndex - 1];
-      if (currentTime < prevTime) {
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-    } else if (doses.length > 0) {
-      // Se voltamos ao início da lista, comparamos com o último horário do ciclo anterior.
-      // Usamos <= para garantir que, se houver apenas um horário, ele avance para o próximo dia.
-      const prevTime = times[times.length - 1];
-      if (currentTime <= prevTime) {
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-    }
-
+  const startIndex = times.indexOf(startTime);
+  if (startIndex === -1) {
+    return doses;
+  }
+  let currentDate = new Date(startDate + 'T12:00:00');
+  let currentIndex = startIndex;
+  let dosesRemaining = totalDoses;
+  while (dosesRemaining > 0) {
     const dateStr = currentDate.toISOString().split('T')[0];
     doses.push({
       date: dateStr,
-      time: currentTime
+      time: times[currentIndex]
     });
-
-    currentDoses++;
-    timeIndex = (timeIndex + 1) % times.length;
+    dosesRemaining--;
+    currentIndex++;
+    if (currentIndex >= times.length) {
+      currentIndex = 0;
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
   }
-
   return doses;
 };
 

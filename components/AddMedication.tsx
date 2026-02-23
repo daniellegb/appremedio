@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Medication, MedicationUnit, UsageCategory, IntervalType, ContraceptiveType } from '../types';
 import { ChevronLeft, Pill, Package, FileText, CalendarDays, Infinity, CalendarClock, Lock, AlertCircle, Clock, Plus, Trash2, Info, AlertTriangle, History, Calendar as CalendarIcon, Tags } from 'lucide-react';
 import { COLORS } from '../constants';
+import { calculatePeriodDoses } from '../src/domain/medicationRules';
 
 interface Props {
   onSave: (medication: Medication) => void;
@@ -117,6 +118,18 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
   };
 
   const calculateEndDate = (start: string, days: number) => {
+    if (formData.usageCategory === 'period') {
+      const sortedTimes = [...formData.times].sort();
+      const doses = calculatePeriodDoses(
+        start,
+        formData.times[0],
+        sortedTimes,
+        days * sortedTimes.length
+      );
+      if (doses.length > 0) {
+        return doses[doses.length - 1].date;
+      }
+    }
     const d = new Date(start + 'T12:00:00');
     d.setDate(d.getDate() + (days - 1));
     return d.toLocaleDateString('en-CA');
@@ -142,9 +155,17 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
       case 'continuous':
         return `Tomar ${formData.dosesPerDay === 'custom' ? `${formData.times.length}x` : formData.dosesPerDay} ao dia, ${formData.intervalDays === 1 ? 'todos os dias' : `a cada ${formData.intervalDays} dias`}, nos horários: ${formData.times.join(', ')}.`;
       case 'period':
-        const endCalculated = calculateEndDate(formData.startDate, formData.durationDays);
-        const endDateStr = new Date(endCalculated + 'T12:00:00').toLocaleDateString('pt-BR');
-        return `Tomar ${formData.dosesPerDay === 'custom' ? `${formData.times.length}x` : formData.dosesPerDay} ao dia, durante ${formData.durationDays} dias (até ${endDateStr}), nos horários: ${formData.times.join(', ')}.`;
+        const sortedTimes = [...formData.times].sort();
+        const doses = calculatePeriodDoses(
+          formData.startDate,
+          formData.times[0],
+          sortedTimes,
+          formData.durationDays * sortedTimes.length
+        );
+        const lastDose = doses.length > 0 ? doses[doses.length - 1] : null;
+        const endDateStr = lastDose ? new Date(lastDose.date + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+        const lastTime = lastDose ? lastDose.time : '';
+        return `Tomar ${formData.dosesPerDay === 'custom' ? `${formData.times.length}x` : formData.dosesPerDay} ao dia, durante ${formData.durationDays} dias (até ${endDateStr}), último horário: ${lastTime}.`;
       case 'intervals':
         return `Uso programado a cada ${formData.intervalDays} dias, começando em ${dateStr} às ${formData.times[0]}.`;
       case 'contraceptive':
@@ -328,6 +349,11 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
                     ))}
                     {formData.dosesPerDay === 'custom' && <button type="button" onClick={addCustomTime} className="flex items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl h-[38px] hover:border-blue-300 transition-colors"><Plus size={20} className="text-slate-400" /></button>}
                   </div>
+                  {isPeriod && (
+                    <p className="text-[10px] text-slate-400 font-medium italic mt-2 flex items-center gap-1">
+                      <Info size={10} /> O primeiro horário cadastrado será o início real do tratamento.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
