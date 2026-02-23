@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from '../types';
 import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil } from 'lucide-react';
 import { calculateDaysOfStockLeft } from '../src/domain/stock';
-import { isMedicationExpired, getDaysUntilExpiry } from '../src/domain/medicationRules';
+import { isMedicationExpired, getDaysUntilExpiry, calculatePeriodDoses } from '../src/domain/medicationRules';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface Props {
@@ -101,9 +101,40 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
         if (diffDays % interval !== 0) return;
       }
 
-    const todayStr = today.toLocaleDateString('en-CA');
+      const todayStr = today.toLocaleDateString('en-CA');
 
-      // Adiciona cada horário configurado à agenda
+      // Se for por período, usamos a lógica determinística de contagem de doses
+      if (med.usageCategory === 'period') {
+        const periodDoses = calculatePeriodDoses(
+          med.startDate || '',
+          med.times || [],
+          med.durationDays || 0,
+          (med.times || []).length
+        );
+        
+        const todayDoses = periodDoses.filter(d => d.date === todayStr);
+        
+        todayDoses.forEach((dose, index) => {
+          const existingDose = doses.find(d => d.medicationId === med.id && d.scheduledTime === dose.time && d.date === todayStr);
+          
+          let finalStatus: 'pending' | 'taken' | 'missed' = 'pending';
+          if (existingDose?.status === 'taken') {
+            finalStatus = 'taken';
+          } else if (dose.time < currentTimeStr) {
+            finalStatus = 'missed';
+          }
+          
+          schedule.push({
+            id: existingDose?.id || `virtual-${med.id}-${dose.time}-${index}`,
+            med,
+            time: dose.time,
+            status: finalStatus
+          });
+        });
+        return;
+      }
+
+      // Adiciona cada horário configurado à agenda (para outros tipos)
       (med.times || []).forEach((time, index) => {
         // Busca se já existe um registro de dose tomada/atrasada para este med e horário hoje
         const existingDose = doses.find(d => d.medicationId === med.id && d.scheduledTime === time && d.date === todayStr);

@@ -64,6 +64,65 @@ export const isStockRunningOut = (daysLeft: number | null, thresholdDays: number
 export type MedicationStockStatus = 'OUT_OF_STOCK' | 'RUNNING_OUT' | 'AVAILABLE';
 export type MedicationExpiryStatus = 'EXPIRED' | 'EXPIRING_SOON' | 'VALID' | 'NO_DATE';
 
+export interface ScheduledDose {
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+}
+
+/**
+ * Calcula a distribuição de doses para medicamentos do tipo "por período".
+ * A contagem é determinística e baseada na ordem circular dos horários cadastrados,
+ * começando pelo primeiro horário da lista no dia de início.
+ */
+export const calculatePeriodDoses = (
+  startDate: string,
+  times: string[],
+  durationDays: number,
+  frequency: number
+): ScheduledDose[] => {
+  const totalDoses = frequency * durationDays;
+  const doses: ScheduledDose[] = [];
+  
+  if (!startDate || !times || times.length === 0 || totalDoses <= 0) {
+    return doses;
+  }
+
+  let currentDoses = 0;
+  // Usamos meio-dia para evitar problemas de fuso horário ao manipular apenas a data
+  const currentDate = new Date(startDate + 'T12:00:00');
+  let timeIndex = 0;
+  
+  while (currentDoses < totalDoses) {
+    const currentTime = times[timeIndex];
+    
+    // Lógica de avanço de dia baseada na ordem circular dos horários
+    if (timeIndex > 0) {
+      const prevTime = times[timeIndex - 1];
+      if (currentTime < prevTime) {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    } else if (doses.length > 0) {
+      // Se voltamos ao início da lista, comparamos com o último horário do ciclo anterior.
+      // Usamos <= para garantir que, se houver apenas um horário, ele avance para o próximo dia.
+      const prevTime = times[times.length - 1];
+      if (currentTime <= prevTime) {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
+
+    const dateStr = currentDate.toISOString().split('T')[0];
+    doses.push({
+      date: dateStr,
+      time: currentTime
+    });
+
+    currentDoses++;
+    timeIndex = (timeIndex + 1) % times.length;
+  }
+
+  return doses;
+};
+
 /**
  * Determina o status de estoque do medicamento.
  */
