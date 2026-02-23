@@ -1,0 +1,47 @@
+
+export const GREETING_MESSAGES = {
+  self: [
+    "Você está fazendo o melhor que pode — e isso é suficiente.",
+    "Respire fundo. Um momento de calma já faz diferença.",
+    "Seu corpo merece cuidado, não cobrança.",
+    "Vá com carinho, um passo de cada vez.",
+    "Está tudo bem desacelerar hoje.",
+    "Se precisar descansar, descanse — você merece.",
+    "Cuidar de si é um abraço que você se dá.",
+    "Pequenos gestos de cuidado já são grandes vitórias.",
+    "Seja gentil consigo, especialmente nos dias difíceis.",
+    "Você não precisa ser forte o tempo todo.",
+    "Ouça seu coração com a mesma atenção que ouve os outros.",
+    "Seu bem-estar importa — muito.",
+    "Permita-se pausas sem culpa.",
+    "Hoje é uma nova chance de cuidar de você.",
+    "Mesmo devagar, você continua avançando.",
+    "Seu ritmo é único, e está tudo bem assim.",
+    "Um copo d’água, uma pausa, um respiro — comece por aí.",
+    "Você merece sentir-se bem no seu próprio tempo.",
+    "O autocuidado é um ato de amor silencioso.",
+    "Estou aqui para lembrar: você é importante."
+  ],
+  caregiver: [
+    "Cuidar de alguém é um ato profundo de amor.",
+    "Você está fazendo a diferença todos os dias.",
+    "Seu cuidado traz segurança e conforto.",
+    "Mesmo nos dias difíceis, sua presença importa.",
+    "Você não precisa fazer tudo sozinho(a).",
+    "Cuidar também exige que você se cuide.",
+    "Seu esforço silencioso tem muito valor.",
+    "Pequenos gestos seus significam muito para quem recebe.",
+    "Está tudo bem sentir cansaço — você é humano(a).",
+    "Cada dose administrada é um ato de responsabilidade e carinho.",
+    "Você é apoio, é presença, é cuidado.",
+    "Fazer o seu melhor já é suficiente.",
+    "Sua atenção salva esquecimentos e traz tranquilidade.",
+    "Permita-se descansar quando puder.",
+    "Seu compromisso é admirável.",
+    "Cuidar é amar em ações diárias.",
+    "Você está construindo segurança com constância.",
+    "Seu cuidado hoje traz mais saúde amanhã.",
+    "Não esqueça: você também merece apoio.",
+    "Obrigado(a) por cuidar com tanto coração."
+  ]
+};

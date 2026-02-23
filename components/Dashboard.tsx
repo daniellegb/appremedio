@@ -3,7 +3,9 @@ import { Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from '
 import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil } from 'lucide-react';
 import { calculateDaysOfStockLeft } from '../src/domain/stock';
 import { isMedicationExpired, getDaysUntilExpiry, calculatePeriodDoses } from '../src/domain/medicationRules';
+import { greetingService } from '../src/domain/greetings/greetingService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { useAuth } from '../src/hooks/useAuth';
 
 interface Props {
   meds: Medication[];
@@ -19,8 +21,25 @@ interface Props {
 }
 
 const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onToggleDose, onEditMed, onUpdateSettings, onDeleteAppointment, onEditAppointment, onAddMed }) => {
+  const { profile, user } = useAuth();
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
   const [showPrnSelector, setShowPrnSelector] = useState(false);
+
+  const caregiverName = profile?.caregiver_name || profile?.name || user?.user_metadata?.full_name || "Usuário";
+  const patientName = profile?.patient_name;
+
+  const welcomeMessage = (profile?.mode === 'caregiver' && patientName)
+    ? `Olá, ${caregiverName}! Como ${patientName} está?`
+    : `Olá, ${profile?.name || user?.user_metadata?.full_name || "Usuário"}!`;
+
+  const greeting = useMemo(() => {
+    // Se showGreeting for explicitamente false, não mostra.
+    // Se for undefined (usuário antigo), assume true.
+    if (settings.showGreeting === false) return null;
+    
+    const mode = profile?.mode || 'self';
+    return greetingService.getGreetingOfDay(mode, user?.created_at);
+  }, [settings.showGreeting, profile?.mode, user?.created_at]);
   const [selectedPrnMed, setSelectedPrnMed] = useState<Medication | null>(null);
   const [prnStep, setPrnStep] = useState<'list' | 'choice' | 'custom'>('list');
   const [customPrnDate, setCustomPrnDate] = useState(new Date().toLocaleDateString('en-CA'));
@@ -228,8 +247,13 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
   return (
     <div className="space-y-8 pb-20 md:pb-0">
       <header>
-        <h2 className="text-3xl font-bold text-slate-900">Olá, João!</h2>
+        <h2 className="text-xl sm:text-3xl font-bold text-slate-900 tracking-tight truncate sm:whitespace-normal">{welcomeMessage}</h2>
         <p className="text-slate-500">Hoje é dia {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}</p>
+        {greeting && (
+          <p className="text-sm text-slate-400 mt-2 font-medium italic">
+            {greeting}
+          </p>
+        )}
       </header>
 
       {/* Stats Summary */}

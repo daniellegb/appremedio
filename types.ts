@@ -52,6 +52,24 @@ export interface AppSettings {
   thresholdExpiring: number;
   thresholdRunningOut: number;
   showDelayDisclaimer: boolean;
+  showGreeting: boolean;
 }
 
-export type ViewType = 'dashboard' | 'calendar' | 'meds' | 'appointments' | 'settings' | 'add-appointment' | 'add-med';
+export interface Profile {
+  id: string;
+  name?: string;
+  mode?: 'self' | 'caregiver';
+  caregiver_name?: string;
+  patient_name?: string;
+  relationship?: string;
+  onboarding_completed: boolean;
+}
+
+export interface UserPreferences {
+  id?: string;
+  user_id: string;
+  expiry_warning_days: number;
+  low_stock_warning_days: number;
+}
+
+export type ViewType = 'dashboard' | 'calendar' | 'meds' | 'appointments' | 'settings' | 'add-appointment' | 'add-med' | 'onboarding';

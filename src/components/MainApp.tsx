@@ -14,6 +14,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { medicationService } from '../services/medicationService';
 import { consumptionService } from '../services/consumptionService';
 import { appointmentService } from '../services/appointmentService';
+import { useLocation } from 'react-router-dom';
 
 import { getUpdatedStock } from '../domain/stock';
 
@@ -24,13 +25,34 @@ const STORAGE_KEYS = {
 const DEFAULT_SETTINGS: AppSettings = {
   thresholdExpiring: 3,
   thresholdRunningOut: 3,
-  showDelayDisclaimer: true
+  showDelayDisclaimer: true,
+  showGreeting: true
 };
 
 const MainApp: React.FC = () => {
   const { user } = useAuthContext();
-  const [view, setView] = useState<ViewType>('dashboard');
+  const location = useLocation();
+  
+  const [meds, setMeds] = useState<Medication[]>([]);
+  const [doses, setDoses] = useState<DoseEvent[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [editingMedication, setEditingMedication] = useState<Medication | null>(null);
+  const [initialMedCategory, setInitialMedCategory] = useState<UsageCategory | undefined>(undefined);
+  
+  const [view, setView] = useState<ViewType>(() => {
+    if (location.state?.openAddMed) return 'add-med';
+    return 'dashboard';
+  });
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (location.state?.openAddMed) {
+      setView('add-med');
+      setEditingMedication(null);
+      setInitialMedCategory(undefined);
+    }
+  }, [location.state]);
   
   const loadData = <T,>(key: string, defaultValue: T): T => {
     try {
@@ -42,10 +64,11 @@ const MainApp: React.FC = () => {
     return defaultValue;
   };
 
-  const [meds, setMeds] = useState<Medication[]>([]);
-  const [doses, setDoses] = useState<DoseEvent[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [settings, setSettings] = useState<AppSettings>(() => loadData(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS));
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const loaded = loadData(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
+    // Merge with defaults to ensure new fields like showGreeting are present
+    return { ...DEFAULT_SETTINGS, ...loaded };
+  });
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -69,10 +92,6 @@ const MainApp: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-  const [editingMedication, setEditingMedication] = useState<Medication | null>(null);
-  const [initialMedCategory, setInitialMedCategory] = useState<UsageCategory | undefined>(undefined);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;

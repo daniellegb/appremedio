@@ -1,7 +1,10 @@
-import React from 'react';
-import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert, RefreshCw, Smile } from 'lucide-react';
 import { AppSettings } from '../types';
 import { useAuth } from '../src/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { onboardingService } from '../src/services/onboardingService';
+import ConfirmationModal from './ConfirmationModal';
 
 interface Props {
   settings: AppSettings;
@@ -10,7 +13,18 @@ interface Props {
 }
 
 const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) => {
-  const { signOut, user } = useAuth();
+  const { signOut, user, refreshProfile, profile } = useAuth();
+  const navigate = useNavigate();
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const displayName = profile?.mode === 'caregiver' 
+    ? profile.caregiver_name 
+    : (profile?.name || user?.user_metadata?.full_name || "Usuário");
+
+  const profileTypeLabel = profile?.mode === 'caregiver' ? 'Cuidador' : 'Autocuidado';
+  const patientInfo = profile?.mode === 'caregiver' && profile.patient_name 
+    ? ` • Cuidando de ${profile.patient_name}` 
+    : '';
 
   const handleLogout = async () => {
     try {
@@ -20,21 +34,50 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
     }
   };
 
+  const handleResetOnboarding = async () => {
+    if (!user) return;
+    
+    try {
+      await onboardingService.resetOnboarding(user.id);
+      await refreshProfile();
+      navigate('/onboarding');
+    } catch (error) {
+      console.error("Erro ao reiniciar onboarding:", error);
+      alert("Erro ao reiniciar onboarding. Tente novamente.");
+    }
+  };
+
   const sections = [
-    { title: 'Conta', icon: User, items: ['Perfil', 'Privacidade', 'Segurança'] },
+    { 
+      title: 'Conta', 
+      icon: User, 
+      items: [
+        { 
+          label: 'Perfil', 
+          sublabel: `${profileTypeLabel}${patientInfo}` 
+        },
+        { label: 'Trocar perfil', action: () => setShowResetConfirm(true), icon: RefreshCw },
+        { label: 'Privacidade' },
+        { label: 'Segurança' }
+      ] 
+    },
   ];
 
   return (
     <div className="space-y-8 pb-20 md:pb-0 max-w-2xl mx-auto">
       <header className="flex flex-col items-center py-6">
-        <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-full p-1 shadow-xl shadow-blue-100 mb-4">
-          <img 
-            src={user?.user_metadata?.avatar_url || "https://picsum.photos/200"} 
-            alt="Profile" 
-            className="w-full h-full rounded-full object-cover border-4 border-white"
-          />
+        <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-full p-1 shadow-xl shadow-blue-100 mb-4 flex items-center justify-center overflow-hidden border-4 border-white">
+          {user?.user_metadata?.avatar_url ? (
+            <img 
+              src={user.user_metadata.avatar_url} 
+              alt="Profile" 
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Smile size={48} className="text-white" />
+          )}
         </div>
-        <h2 className="text-2xl font-bold">{user?.user_metadata?.full_name || "Usuário"}</h2>
+        <h2 className="text-2xl font-bold">{displayName}</h2>
         <p className="text-slate-500">{user?.email || "email@exemplo.com"}</p>
       </header>
 
@@ -46,12 +89,30 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">{section.title}</h3>
             </div>
             <div className="divide-y divide-slate-50">
-              {section.items.map(item => (
-                <button key={item} className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors text-left">
-                  <span className="font-medium text-slate-700">{item}</span>
-                  <ChevronRight size={18} className="text-slate-300" />
-                </button>
-              ))}
+              {section.items.map(item => {
+                const label = typeof item === 'string' ? item : item.label;
+                const action = typeof item === 'string' ? undefined : item.action;
+                const Icon = typeof item === 'string' ? null : item.icon;
+                
+                return (
+                  <div 
+                    key={label} 
+                    onClick={action}
+                    className={`w-full flex items-center justify-between px-6 py-4 transition-colors text-left group ${action ? 'hover:bg-slate-50 cursor-pointer' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {Icon && <Icon size={16} className="text-blue-500" />}
+                      <div>
+                        <span className={`font-medium ${action ? 'text-blue-600' : 'text-slate-700'}`}>{label}</span>
+                        {item.sublabel && (
+                          <p className="text-xs text-slate-400 font-normal">{item.sublabel}</p>
+                        )}
+                      </div>
+                    </div>
+                    {action && <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400 transition-colors" />}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -118,6 +179,24 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.showDelayDisclaimer ? 'right-1' : 'left-1'}`} />
               </button>
             </div>
+
+            <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg">
+                  <Smile size={20} />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-700">Frases de Boas-vindas</div>
+                  <div className="text-xs text-slate-400">Exibir frases motivacionais no Dashboard</div>
+                </div>
+              </div>
+              <button 
+                onClick={() => onUpdateSettings({ ...settings, showGreeting: !settings.showGreeting })}
+                className={`w-12 h-6 rounded-full transition-colors relative ${settings.showGreeting ? 'bg-blue-600' : 'bg-slate-200'}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.showGreeting ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -153,6 +232,20 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
         Versão 1.3.1 (Status Inteligente)<br/>
         MedManager - Gestão de Saúde Simplificada
       </p>
+
+      <ConfirmationModal
+        isOpen={showResetConfirm}
+        title="Trocar Perfil"
+        message="Isso permitirá que você reconfigure seu perfil (autocuidado ou cuidador). Seus dados de medicamentos e consultas serão mantidos. Deseja continuar?"
+        confirmText="Continuar"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={() => {
+          setShowResetConfirm(false);
+          handleResetOnboarding();
+        }}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </div>
   );
 };

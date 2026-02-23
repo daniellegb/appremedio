@@ -211,7 +211,7 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Dosagem</label>
-              <input required className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: 500mg" value={formData.dosage} onChange={e => setFormData({...formData, dosage: e.target.value})} />
+              <input required className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: 1 comprimido" value={formData.dosage} onChange={e => setFormData({...formData, dosage: e.target.value})} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Unidade</label>

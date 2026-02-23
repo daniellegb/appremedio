@@ -2,7 +2,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 
 export const useAuth = () => {
-  const { user, session, loading, signOut, isConfigured } = useAuthContext();
+  const { user, session, profile, loading, signOut, isConfigured, refreshProfile } = useAuthContext();
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -21,9 +21,12 @@ export const useAuth = () => {
     session,
     loading,
     isAuthenticated: !!user,
+    onboardingCompleted: profile?.onboarding_completed ?? false,
+    profile,
     signOut,
     signIn,
     signUp,
     isConfigured,
+    refreshProfile
   };
 };

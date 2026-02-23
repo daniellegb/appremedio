@@ -1,9 +1,10 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 const PrivateRoute: React.FC = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, onboardingCompleted, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -13,7 +14,18 @@ const PrivateRoute: React.FC = () => {
     );
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Se o onboarding não foi concluído e não estamos na página de onboarding, redireciona
+  if (!onboardingCompleted && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  // Se o onboarding já foi concluído e estamos na página de onboarding, 
+  // deixamos o componente Onboarding lidar com a navegação final para preservar o estado (ex: abrir cadastro de remédio)
+  return <Outlet />;
 };
 
 export default PrivateRoute;
