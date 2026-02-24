@@ -41,7 +41,7 @@ const Navigation: React.FC<Props> = ({ currentView, setView }) => {
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white">
             <Pill size={24} />
           </div>
-          <h1 className="text-xl font-bold text-slate-900">MedManager</h1>
+          <h1 className="text-xl font-bold text-slate-900">Remédio em Dia</h1>
         </div>
         <div className="flex flex-col gap-2">
           {navItems.map((item) => (

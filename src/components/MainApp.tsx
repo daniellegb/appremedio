@@ -59,7 +59,7 @@ const MainApp: React.FC = () => {
       const saved = localStorage.getItem(key);
       if (saved) return JSON.parse(saved);
     } catch (e) {
-      console.error(`[MedManager] Erro ao carregar ${key}:`, e);
+      console.error(`[Remédio em Dia] Erro ao carregar ${key}:`, e);
     }
     return defaultValue;
   };

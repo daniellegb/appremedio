@@ -230,7 +230,7 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
 
       <p className="text-center text-xs text-slate-400 pb-10">
         Versão 1.3.1 (Status Inteligente)<br/>
-        MedManager - Gestão de Saúde Simplificada
+        Remédio em Dia - Gestão de Saúde Simplificada
       </p>
 
       <ConfirmationModal
