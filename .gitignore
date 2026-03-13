@@ -24,5 +24,5 @@ dist-ssr
 *.sw?
 
 VAPID_KEY.txt
-README_PUSH.txt
-supabase_migration_push.txt
+README_PUSH.md
+supabase_migration_push.md
