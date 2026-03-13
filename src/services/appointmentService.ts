@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Appointment } from '../../types';
+import { notificationService } from './notificationService';
 
 const mapToCamelCase = (app: any): Appointment => ({
   id: app.id,
@@ -47,6 +48,22 @@ export const appointmentService = {
       .single();
 
     if (error) throw error;
+
+    // Agendar notificação para o dia anterior às 08:00
+    if (created.date) {
+      const triggerDate = new Date(created.date);
+      triggerDate.setDate(triggerDate.getDate() - 1);
+      triggerDate.setHours(8, 0, 0, 0);
+      
+      await notificationService.scheduleAppointmentNotification(
+        userId,
+        created.id,
+        created.doctor || created.specialty || 'Consulta',
+        created.type,
+        triggerDate.toISOString()
+      );
+    }
+
     return mapToCamelCase(created);
   },
 
@@ -63,6 +80,22 @@ export const appointmentService = {
       .single();
 
     if (error) throw error;
+
+    // Re-agendar se a data mudou
+    if (data.date) {
+      const triggerDate = new Date(updated.date);
+      triggerDate.setDate(triggerDate.getDate() - 1);
+      triggerDate.setHours(8, 0, 0, 0);
+      
+      await notificationService.scheduleAppointmentNotification(
+        userId,
+        updated.id,
+        updated.doctor || updated.specialty || 'Consulta',
+        updated.type,
+        triggerDate.toISOString()
+      );
+    }
+
     return mapToCamelCase(updated);
   },
 

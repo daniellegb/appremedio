@@ -1,10 +1,11 @@
+
 import { supabase } from '../lib/supabase';
-import { PushSubscriptionData } from '../../types';
 
 export const pushService = {
   async saveSubscription(userId: string, subscription: PushSubscription) {
     const subData = subscription.toJSON();
-    if (!subData.endpoint) {
+    
+    if (!subData.endpoint || !subData.keys?.p256dh || !subData.keys?.auth) {
       throw new Error('Invalid subscription object');
     }
 
@@ -13,7 +14,8 @@ export const pushService = {
       .upsert({
         user_id: userId,
         endpoint: subData.endpoint,
-        subscription: subData
+        p256dh: subData.keys.p256dh,
+        auth: subData.keys.auth
       }, { onConflict: 'user_id, endpoint' });
 
     if (error) throw error;
@@ -27,16 +29,6 @@ export const pushService = {
       .eq('endpoint', endpoint);
 
     if (error) throw error;
-  },
-
-  async getSubscriptions(userId: string) {
-    const { data, error } = await supabase
-      .from('push_subscriptions')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (error) throw error;
-    return data as PushSubscriptionData[];
   }
 };
 
@@ -45,22 +37,31 @@ export const subscribeUser = async (userId: string, vapidPublicKey: string) => {
     throw new Error('Push notifications are not supported in this browser');
   }
 
-  const registration = await navigator.serviceWorker.ready;
-  
-  // Check if already subscribed
-  const existingSub = await registration.pushManager.getSubscription();
-  if (existingSub) {
-    await pushService.saveSubscription(userId, existingSub);
-    return existingSub;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    
+    // Solicitar permissão explicitamente
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      throw new Error('Permission not granted');
+    }
+
+    // Verificar se já existe uma inscrição
+    let subscription = await registration.pushManager.getSubscription();
+    
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+      });
+    }
+
+    await pushService.saveSubscription(userId, subscription);
+    return subscription;
+  } catch (error) {
+    console.error('Error subscribing to push:', error);
+    throw error;
   }
-
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-  });
-
-  await pushService.saveSubscription(userId, subscription);
-  return subscription;
 };
 
 function urlBase64ToUint8Array(base64String: string) {

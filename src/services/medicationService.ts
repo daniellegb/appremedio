@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Medication } from '../../types';
 import { getNextDoseAt } from '../domain/medicationRules';
+import { notificationService } from './notificationService';
 
 const mapToCamelCase = (med: any): Medication => ({
   id: med.id,
@@ -75,6 +76,18 @@ export const medicationService = {
       .single();
 
     if (error) throw error;
+
+    // Agendar notificação se houver próxima dose
+    if (nextDoseAt) {
+      await notificationService.scheduleMedicationNotification(
+        userId,
+        created.id,
+        created.name,
+        created.dosage,
+        nextDoseAt
+      );
+    }
+
     return mapToCamelCase(created);
   },
 
@@ -121,6 +134,18 @@ export const medicationService = {
       .single();
 
     if (error) throw error;
+
+    // Agendar nova notificação se a próxima dose mudou
+    if (updateData.next_dose_at) {
+      await notificationService.scheduleMedicationNotification(
+        userId,
+        updated.id,
+        updated.name,
+        updated.dosage,
+        updateData.next_dose_at
+      );
+    }
+
     return mapToCamelCase(updated);
   },
 

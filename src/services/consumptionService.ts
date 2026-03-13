@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
-import { DoseEvent } from '../../types';
+import { DoseEvent, Medication } from '../../types';
+import { getNextDoseAt } from '../domain/medicationRules';
+import { notificationService } from './notificationService';
 
 const mapToCamelCase = (record: any): DoseEvent => ({
   id: record.id,
@@ -7,6 +9,30 @@ const mapToCamelCase = (record: any): DoseEvent => ({
   date: record.date,
   scheduledTime: record.scheduled_time,
   status: record.status
+});
+
+const mapMedToCamelCase = (med: any): Medication => ({
+  id: med.id,
+  name: med.name,
+  dosage: med.dosage,
+  unit: med.unit,
+  usageCategory: med.usage_category,
+  dosesPerDay: med.doses_per_day,
+  intervalDays: med.interval_days,
+  times: med.times,
+  intervalType: med.interval_type,
+  contraceptiveType: med.contraceptive_type,
+  startDate: med.start_date,
+  endDate: med.end_date,
+  durationDays: med.duration_days,
+  maxDosesPerDay: med.max_doses_per_day,
+  totalStock: med.total_stock,
+  currentStock: med.current_stock,
+  expiryDate: med.expiry_date,
+  notes: med.notes,
+  color: med.color,
+  frequency: med.frequency || 1,
+  next_dose_at: med.next_dose_at
 });
 
 export const consumptionService = {
@@ -36,6 +62,40 @@ export const consumptionService = {
       .single();
 
     if (error) throw error;
+
+    // Se a dose foi tomada, atualizar o estoque e a próxima dose do medicamento
+    if (data.status === 'taken') {
+      const { data: med } = await supabase
+        .from('medications')
+        .select('*')
+        .eq('id', data.medicationId)
+        .single();
+
+      if (med) {
+        const currentStock = Math.max(0, (med.current_stock || 0) - 1);
+        const nextDoseAt = getNextDoseAt(mapMedToCamelCase(med));
+
+        await supabase
+          .from('medications')
+          .update({ 
+            current_stock: currentStock,
+            next_dose_at: nextDoseAt
+          })
+          .eq('id', med.id);
+
+        // Agendar a próxima notificação
+        if (nextDoseAt) {
+          await notificationService.scheduleMedicationNotification(
+            userId,
+            med.id,
+            med.name,
+            med.dosage,
+            nextDoseAt
+          );
+        }
+      }
+    }
+
     return mapToCamelCase(created);
   },
 
