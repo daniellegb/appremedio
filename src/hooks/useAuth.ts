@@ -11,9 +11,17 @@ export const useAuth = () => {
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) throw error;
-    return data;
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        console.error('Supabase signUp error:', error);
+        throw error;
+      }
+      return data;
+    } catch (err) {
+      console.error('Catch block signUp error:', err);
+      throw err;
+    }
   };
 
   return {

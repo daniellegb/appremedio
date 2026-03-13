@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Medication } from '../../types';
+import { getNextDoseAt } from '../domain/medicationRules';
 
 const mapToCamelCase = (med: any): Medication => ({
   id: med.id,
@@ -21,7 +22,8 @@ const mapToCamelCase = (med: any): Medication => ({
   expiryDate: med.expiry_date,
   notes: med.notes,
   color: med.color,
-  frequency: med.frequency || 1
+  frequency: med.frequency || 1,
+  next_dose_at: med.next_dose_at
 });
 
 const nullIfEmpty = (val: string | undefined | null) => {
@@ -42,6 +44,8 @@ export const medicationService = {
   },
 
   async createMedication(userId: string, data: Omit<Medication, 'id'>) {
+    const nextDoseAt = getNextDoseAt(data as Medication);
+    
     const { data: created, error } = await supabase
       .from('medications')
       .insert([{ 
@@ -64,7 +68,8 @@ export const medicationService = {
         notes: data.notes,
         color: data.color,
         frequency: data.frequency || 1,
-        user_id: userId 
+        user_id: userId,
+        next_dose_at: nextDoseAt
       }])
       .select()
       .single();
@@ -94,6 +99,18 @@ export const medicationService = {
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.color !== undefined) updateData.color = data.color;
     if (data.frequency !== undefined) updateData.frequency = data.frequency;
+
+    // Recalcular próxima dose se campos relevantes mudarem
+    if (data.times || data.intervalDays || data.usageCategory || data.startDate) {
+      // Precisamos do objeto completo para calcular
+      const { data: current } = await supabase.from('medications').select('*').eq('id', id).single();
+      if (current) {
+        const fullMed = mapToCamelCase({ ...current, ...updateData });
+        updateData.next_dose_at = getNextDoseAt(fullMed);
+      }
+    } else if (data.next_dose_at !== undefined) {
+      updateData.next_dose_at = data.next_dose_at;
+    }
 
     const { data: updated, error } = await supabase
       .from('medications')

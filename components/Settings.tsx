@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert, RefreshCw, Smile } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert, RefreshCw, Smile, Smartphone } from 'lucide-react';
 import { AppSettings } from '../types';
 import { useAuth } from '../src/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { onboardingService } from '../src/services/onboardingService';
+import { subscribeUser, pushService } from '../src/services/pushService';
 import ConfirmationModal from './ConfirmationModal';
 
 interface Props {
@@ -16,6 +17,84 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
   const { signOut, user, refreshProfile, profile } = useAuth();
   const navigate = useNavigate();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [isPushLoading, setIsPushLoading] = useState(false);
+
+  useEffect(() => {
+    // Check if user is already subscribed
+    if ('serviceWorker' in navigator && user) {
+      navigator.serviceWorker.ready.then(registration => {
+        registration.pushManager.getSubscription().then(subscription => {
+          setPushEnabled(!!subscription);
+        });
+      });
+    }
+  }, [user]);
+
+  const handleTogglePush = async () => {
+    if (!user) return;
+    
+    // Check if notifications are supported
+    if (!('Notification' in window)) {
+      alert("Este navegador não suporta notificações.");
+      return;
+    }
+
+    // Check if we are in an iframe (AI Studio Preview)
+    const isInIframe = window.self !== window.top;
+    if (isInIframe && Notification.permission === 'default') {
+      alert("Para ativar as notificações no AI Studio, por favor abra o aplicativo em uma nova aba usando o botão no canto superior direito.");
+      return;
+    }
+
+    // Check if permission was previously denied
+    if (Notification.permission === 'denied') {
+      alert("As notificações foram bloqueadas. Por favor, redefina as permissões nas configurações do seu navegador (clique no cadeado ao lado da URL). Se você estiver no AI Studio, tente abrir o app em uma nova aba.");
+      return;
+    }
+
+    setIsPushLoading(true);
+    try {
+      if (pushEnabled) {
+        // Unsubscribe
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          await subscription.unsubscribe();
+          await pushService.deleteSubscription(subscription.endpoint);
+        }
+        setPushEnabled(false);
+      } else {
+        // Subscribe
+        const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+        if (!vapidKey || vapidKey === 'your-vapid-public-key') {
+          alert("Erro: Chave VAPID não configurada corretamente no ambiente.");
+          setIsPushLoading(false);
+          return;
+        }
+        
+        // Request permission explicitly first if default
+        if (Notification.permission === 'default') {
+          const permission = await Notification.requestPermission();
+          if (permission !== 'granted') {
+            throw new Error('Permission not granted');
+          }
+        }
+
+        await subscribeUser(user.id, vapidKey);
+        setPushEnabled(true);
+      }
+    } catch (error: any) {
+      console.error("Erro ao gerenciar notificações push:", error);
+      if (error.message === 'Permission not granted' || error.name === 'NotAllowedError') {
+        alert("Permissão de notificação negada. Ative as notificações para receber lembretes.");
+      } else {
+        alert("Erro ao configurar notificações. Verifique se você está em uma conexão segura (HTTPS) e se as permissões do navegador permitem notificações.");
+      }
+    } finally {
+      setIsPushLoading(false);
+    }
+  };
 
   const displayName = profile?.mode === 'caregiver' 
     ? profile.caregiver_name 
@@ -195,6 +274,25 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                 className={`w-12 h-6 rounded-full transition-colors relative ${settings.showGreeting ? 'bg-blue-600' : 'bg-slate-200'}`}
               >
                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.showGreeting ? 'right-1' : 'left-1'}`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-50 text-purple-500 rounded-lg">
+                  <Smartphone size={20} />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-700">Notificações Push</div>
+                  <div className="text-xs text-slate-400">Lembretes no navegador</div>
+                </div>
+              </div>
+              <button 
+                onClick={handleTogglePush}
+                disabled={isPushLoading}
+                className={`w-12 h-6 rounded-full transition-colors relative ${pushEnabled ? 'bg-blue-600' : 'bg-slate-200'} ${isPushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${pushEnabled ? 'right-1' : 'left-1'}`} />
               </button>
             </div>
           </div>

@@ -17,6 +17,7 @@ import { appointmentService } from '../services/appointmentService';
 import { useLocation } from 'react-router-dom';
 
 import { getUpdatedStock } from '../domain/stock';
+import { getNextDoseAt } from '../domain/medicationRules';
 
 const STORAGE_KEYS = {
   SETTINGS: 'medmanager_v2_settings'
@@ -246,7 +247,9 @@ const MainApp: React.FC = () => {
         // Atualiza estoque baseado na mudança de status para meds regulares
         if (med) {
           const updatedMed = await medicationService.updateMedication(user.id, med.id, { 
-            currentStock: getUpdatedStock(med.currentStock, newStatus) 
+            currentStock: getUpdatedStock(med.currentStock, newStatus),
+            // Recalcular próxima dose ao marcar como tomado
+            next_dose_at: newStatus === 'taken' ? getNextDoseAt(med) : med.next_dose_at
           });
           setMeds(currentMeds => currentMeds.map(m => m.id === updatedMed.id ? updatedMed : m));
         }
@@ -266,7 +269,8 @@ const MainApp: React.FC = () => {
         const med = meds.find(m => m.id === medicationId);
         if (med) {
           const updatedMed = await medicationService.updateMedication(user.id, med.id, { 
-            currentStock: getUpdatedStock(med.currentStock, 'taken') 
+            currentStock: getUpdatedStock(med.currentStock, 'taken'),
+            next_dose_at: getNextDoseAt(med)
           });
           setMeds(prev => prev.map(m => m.id === updatedMed.id ? updatedMed : m));
         }

@@ -124,3 +124,88 @@ export const getExpiryStatusType = (med: Medication, referenceDate: Date, thresh
   if (isMedicationExpiringSoon(med.expiryDate, referenceDate, thresholdDays)) return 'EXPIRING_SOON';
   return 'VALID';
 };
+
+/**
+ * Calcula a próxima dose programada com base nas regras do medicamento.
+ */
+export const getNextDoseAt = (med: Medication, referenceDate: Date = new Date()): string | null => {
+  if (med.usageCategory === 'prn' || !med.times || med.times.length === 0) {
+    return null;
+  }
+
+  const now = referenceDate;
+  const todayStr = now.toISOString().split('T')[0];
+  
+  // Se houver data de término e já passou, não há próxima dose
+  if (med.endDate && new Date(med.endDate + 'T23:59:59') < now) {
+    return null;
+  }
+
+  // Se houver data de início e ainda não chegou, a primeira dose é na data de início
+  const startDate = med.startDate ? new Date(med.startDate + 'T00:00:00') : now;
+  
+  // Ordenar horários
+  const sortedTimes = [...med.times].sort();
+
+  // Caso 1: Contínuo ou Período
+  if (med.usageCategory === 'continuous' || med.usageCategory === 'period') {
+    const intervalDays = med.intervalDays || 1;
+    
+    // Procurar o próximo horário hoje
+    for (const time of sortedTimes) {
+      const doseDateTime = new Date(`${todayStr}T${time}:00`);
+      if (doseDateTime > now && doseDateTime >= startDate) {
+        return doseDateTime.toISOString();
+      }
+    }
+
+    // Se não houver mais hoje, procurar no próximo dia válido
+    let nextDate = new Date(now);
+    nextDate.setDate(nextDate.getDate() + 1);
+    
+    // Se for intervalo de dias (ex: a cada 2 dias), precisamos calcular o deslocamento desde o início
+    if (med.usageCategory === 'continuous' && intervalDays > 1 && med.startDate) {
+      const start = new Date(med.startDate + 'T00:00:00');
+      const diffTime = Math.abs(nextDate.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const remainder = diffDays % intervalDays;
+      if (remainder !== 0) {
+        nextDate.setDate(nextDate.getDate() + (intervalDays - remainder));
+      }
+    }
+
+    const nextDateStr = nextDate.toISOString().split('T')[0];
+    return new Date(`${nextDateStr}T${sortedTimes[0]}:00`).toISOString();
+  }
+
+  // Caso 2: Grandes Intervalos
+  if (med.usageCategory === 'intervals') {
+    const intervalDays = med.intervalDays || 1;
+    const start = med.startDate ? new Date(med.startDate + 'T' + med.times[0] + ':00') : now;
+    
+    if (start > now) return start.toISOString();
+
+    const diffTime = Math.abs(now.getTime() - start.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const intervalsPassed = Math.floor(diffDays / intervalDays) + 1;
+    
+    const nextDate = new Date(start);
+    nextDate.setDate(nextDate.getDate() + (intervalsPassed * intervalDays));
+    return nextDate.toISOString();
+  }
+
+  // Caso 3: Anticoncepcional (Simplificado para o próximo horário)
+  if (med.usageCategory === 'contraceptive') {
+    // Lógica similar ao contínuo, mas ignorando pausas por enquanto (MVP)
+    for (const time of sortedTimes) {
+      const doseDateTime = new Date(`${todayStr}T${time}:00`);
+      if (doseDateTime > now) return doseDateTime.toISOString();
+    }
+    let nextDate = new Date(now);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const nextDateStr = nextDate.toISOString().split('T')[0];
+    return new Date(`${nextDateStr}T${sortedTimes[0]}:00`).toISOString();
+  }
+
+  return null;
+};
