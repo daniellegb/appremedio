@@ -23,6 +23,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { test, userId } = await req.json().catch(() => ({}))
+    const now = new Date()
 
     if (test && userId) {
       console.log(`Sending test notification to user ${userId}`)
@@ -51,63 +52,94 @@ serve(async (req) => {
       })
     }
 
-    // 1. Buscar todos os lembretes ativos
-    // Nota: Para escala massiva, poderíamos otimizar filtrando por janelas de tempo,
-    // mas para garantir precisão com timezones, buscamos os ativos e validamos o horário local.
+    // 1. Buscar lembretes de medicação recorrentes
     const { data: reminders, error: remindersError } = await supabase
       .from('medication_reminders')
-      .select('*, push_subscriptions(subscription, timezone)')
+      .select('*')
       .eq('active', true)
 
     if (remindersError) throw remindersError
 
-    if (!reminders || reminders.length === 0) {
-      console.log('No active reminders found in database.')
-      return new Response(JSON.stringify({ message: 'No active reminders' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      })
+    // 2. Buscar notificações agendadas (one-off) na fila
+    const { data: queuedNotifications, error: queueError } = await supabase
+      .from('notification_queue')
+      .select('*')
+      .eq('sent', false)
+      .lte('trigger_at', now.toISOString())
+
+    if (queueError) throw queueError
+
+    // 3. Buscar todas as assinaturas push dos usuários afetados
+    const userIds = [
+      ...(reminders?.map(r => r.user_id) || []),
+      ...(queuedNotifications?.map(n => n.user_id) || [])
+    ]
+    
+    const uniqueUserIds = [...new Set(userIds)]
+    let allSubscriptions: any[] = []
+    
+    if (uniqueUserIds.length > 0) {
+      const { data: subs, error: subsError } = await supabase
+        .from('push_subscriptions')
+        .select('user_id, subscription, timezone')
+        .in('user_id', uniqueUserIds)
+      
+      if (subsError) throw subsError
+      allSubscriptions = subs || []
     }
 
-    const now = new Date()
     const results = []
 
-    for (const reminder of reminders) {
-      const subs = reminder.push_subscriptions || []
-      if (subs.length === 0) continue
+    // Processar lembretes recorrentes
+    if (reminders && reminders.length > 0) {
+      for (const reminder of reminders) {
+        const userSubs = allSubscriptions.filter(s => s.user_id === reminder.user_id)
+        for (const { subscription, timezone } of userSubs) {
+          const userTime = now.toLocaleTimeString('pt-BR', {
+            timeZone: timezone || 'UTC',
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+          const reminderTimeShort = reminder.reminder_time.substring(0, 5)
 
-      for (const { subscription, timezone } of subs) {
-        // Obter a hora atual no timezone do usuário
-        const userTime = now.toLocaleTimeString('pt-BR', {
-          timeZone: timezone || 'UTC',
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit'
-        })
-
-        // O reminder_time no banco é "HH:mm:ss", pegamos apenas "HH:mm"
-        const reminderTimeShort = reminder.reminder_time.substring(0, 5)
-
-        console.log(`Checking reminder ${reminder.medication_name} for user ${reminder.user_id}. Local time: ${userTime}, Reminder time: ${reminderTimeShort}`)
-
-        if (userTime === reminderTimeShort) {
-          try {
-            const payload = JSON.stringify({
-              title: 'Hora do Medicamento 💊',
-              body: `Lembrete: Tomar ${reminder.medication_name}`,
-              url: '/dashboard'
-            })
-
-            await webpush.sendNotification(subscription, payload)
-            results.push({ user_id: reminder.user_id, medication: reminder.medication_name, status: 'sent' })
-            console.log(`Notification sent to user ${reminder.user_id} for ${reminder.medication_name}`)
-          } catch (err) {
-            console.error(`Error sending push to sub:`, err)
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              await supabase.from('push_subscriptions').delete().eq('subscription->>endpoint', subscription.endpoint)
+          if (userTime === reminderTimeShort) {
+            try {
+              await webpush.sendNotification(subscription, JSON.stringify({
+                title: 'Hora do Medicamento 💊',
+                body: `Lembrete: Tomar ${reminder.medication_name}`,
+                url: '/dashboard'
+              }))
+              results.push({ type: 'medication', id: reminder.id })
+            } catch (err) {
+              console.error(`Error sending push:`, err)
+              if (err.statusCode === 410 || err.statusCode === 404) {
+                await supabase.from('push_subscriptions').delete().eq('subscription->>endpoint', subscription.endpoint)
+              }
             }
           }
         }
+      }
+    }
+
+    // Processar notificações da fila (one-off)
+    if (queuedNotifications && queuedNotifications.length > 0) {
+      for (const notification of queuedNotifications) {
+        const userSubs = allSubscriptions.filter(s => s.user_id === notification.user_id)
+        for (const { subscription } of userSubs) {
+          try {
+            await webpush.sendNotification(subscription, JSON.stringify({
+              title: notification.title,
+              body: notification.body,
+              url: '/dashboard'
+            }))
+            results.push({ type: 'queue', id: notification.id })
+          } catch (err) {
+            console.error(`Error sending queued push:`, err)
+          }
+        }
+        // Marcar como enviada
+        await supabase.from('notification_queue').update({ sent: true }).eq('id', notification.id)
       }
     }
 

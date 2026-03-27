@@ -23,4 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
+VAPID_KEY.txt
+VAPID_CHANGE_GUIDE.md
 

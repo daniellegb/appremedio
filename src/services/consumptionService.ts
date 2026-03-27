@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { DoseEvent, Medication } from '../../types';
 import { getNextDoseAt } from '../domain/medicationRules';
-import { notificationService } from './notificationService';
 
 const mapToCamelCase = (record: any): DoseEvent => ({
   id: record.id,
@@ -82,17 +81,6 @@ export const consumptionService = {
             next_dose_at: nextDoseAt
           })
           .eq('id', med.id);
-
-        // Agendar a próxima notificação
-        if (nextDoseAt) {
-          await notificationService.scheduleMedicationNotification(
-            userId,
-            med.id,
-            med.name,
-            med.dosage,
-            nextDoseAt
-          );
-        }
       }
     }
 
