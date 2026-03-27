@@ -22,7 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-VAPID_KEY.txt
-README_PUSH.md
-supabase_migration_push.md

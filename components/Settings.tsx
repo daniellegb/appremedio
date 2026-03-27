@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert, RefreshCw, Smile, Smartphone } from 'lucide-react';
+import { User, Bell, LogOut, ChevronRight, Database, Trash2, AlertTriangle, CalendarClock, ShieldAlert, RefreshCw, Smile, Smartphone, Send } from 'lucide-react';
 import { AppSettings } from '../types';
 import { useAuth } from '../src/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -287,13 +287,37 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                   <div className="text-xs text-slate-400">Lembretes no navegador</div>
                 </div>
               </div>
-              <button 
-                onClick={handleTogglePush}
-                disabled={isPushLoading}
-                className={`w-12 h-6 rounded-full transition-colors relative ${pushEnabled ? 'bg-blue-600' : 'bg-slate-200'} ${isPushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${pushEnabled ? 'right-1' : 'left-1'}`} />
-              </button>
+              <div className="flex items-center gap-3">
+                {pushEnabled && (
+                  <button 
+                    onClick={async () => {
+                      if (!user) return;
+                      setIsPushLoading(true);
+                      try {
+                        await pushService.sendTestNotification(user.id);
+                        alert("Notificação de teste enviada! Verifique seu dispositivo.");
+                      } catch (error) {
+                        console.error("Erro ao enviar teste:", error);
+                        alert("Erro ao enviar notificação de teste. Verifique os logs da Edge Function.");
+                      } finally {
+                        setIsPushLoading(false);
+                      }
+                    }}
+                    disabled={isPushLoading}
+                    className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+                    title="Testar Notificação"
+                  >
+                    <Send size={18} />
+                  </button>
+                )}
+                <button 
+                  onClick={handleTogglePush}
+                  disabled={isPushLoading}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${pushEnabled ? 'bg-blue-600' : 'bg-slate-200'} ${isPushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${pushEnabled ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
             </div>
           </div>
         </div>

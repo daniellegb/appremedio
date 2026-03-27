@@ -4,19 +4,15 @@ import { supabase } from '../lib/supabase';
 export const pushService = {
   async saveSubscription(userId: string, subscription: PushSubscription) {
     const subData = subscription.toJSON();
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
-    if (!subData.endpoint || !subData.keys?.p256dh || !subData.keys?.auth) {
-      throw new Error('Invalid subscription object');
-    }
-
     const { data, error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id: userId,
-        endpoint: subData.endpoint,
-        p256dh: subData.keys.p256dh,
-        auth: subData.keys.auth
-      }, { onConflict: 'user_id, endpoint' });
+        subscription: subData,
+        timezone: timezone
+      }, { onConflict: 'user_id, subscription' });
 
     if (error) throw error;
     return data;
@@ -26,9 +22,49 @@ export const pushService = {
     const { error } = await supabase
       .from('push_subscriptions')
       .delete()
-      .eq('endpoint', endpoint);
+      .filter('subscription->>endpoint', 'eq', endpoint);
 
     if (error) throw error;
+  },
+
+  async syncMedicationReminders(userId: string, medications: any[]) {
+    // 1. Remover lembretes antigos
+    await supabase
+      .from('medication_reminders')
+      .delete()
+      .eq('user_id', userId);
+
+    // 2. Criar novos lembretes baseados nos horários dos medicamentos
+    const reminders: any[] = [];
+    
+    medications.forEach(med => {
+      if (med.times && Array.isArray(med.times)) {
+        med.times.forEach((time: string) => {
+          reminders.push({
+            user_id: userId,
+            medication_id: med.id,
+            medication_name: med.name,
+            reminder_time: time,
+            active: true
+          });
+        });
+      }
+    });
+
+    if (reminders.length > 0) {
+      const { error } = await supabase
+        .from('medication_reminders')
+        .insert(reminders);
+      if (error) throw error;
+    }
+  },
+
+  async sendTestNotification(userId: string) {
+    const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
+      body: { test: true, userId }
+    });
+    if (error) throw error;
+    return data;
   }
 };
 
@@ -40,13 +76,11 @@ export const subscribeUser = async (userId: string, vapidPublicKey: string) => {
   try {
     const registration = await navigator.serviceWorker.ready;
     
-    // Solicitar permissão explicitamente
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       throw new Error('Permission not granted');
     }
 
-    // Verificar se já existe uma inscrição
     let subscription = await registration.pushManager.getSubscription();
     
     if (!subscription) {

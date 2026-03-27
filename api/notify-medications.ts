@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             endpoint: sub.endpoint,
             keys: {
               p256dh: sub.p256dh,
-              auth: sub.auth
+              auth: sub.auth_key
             }
           };
 
