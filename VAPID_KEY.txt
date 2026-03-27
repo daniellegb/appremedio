@@ -1,5 +1,0 @@
-{
-"subject" : "mailto: <daniellegb@protonmail.com>",
-"publicKey" : "BFKzby8k_tfRUwSaVYXodKRVTIKpjz9tW-fVYHvcjU32dA5Df9TB-yzhlOnQ3u40dg6xFV02Tc7azmlFVuH5qes",
-"privateKey" : "Xurv8MP9-nvsP8Msf_Nh00cDCYqvEUklT7e9z2dLkhE"
-}
