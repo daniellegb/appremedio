@@ -71,14 +71,26 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
     subscription JSONB NOT NULL,
+    endpoint TEXT NOT NULL,
     timezone TEXT DEFAULT 'UTC',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, subscription)
+    UNIQUE(user_id, endpoint)
 );
 
 -- Garantir colunas novas caso a tabela já existisse com estrutura antiga
 ALTER TABLE public.push_subscriptions ADD COLUMN IF NOT EXISTS subscription JSONB;
+ALTER TABLE public.push_subscriptions ADD COLUMN IF NOT EXISTS endpoint TEXT;
 ALTER TABLE public.push_subscriptions ADD COLUMN IF NOT EXISTS timezone TEXT DEFAULT 'UTC';
+
+-- Tentar preencher endpoint se estiver nulo e criar índice único
+DO $$ 
+BEGIN
+    UPDATE public.push_subscriptions SET endpoint = subscription->>'endpoint' WHERE endpoint IS NULL;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'push_subscriptions_user_id_endpoint_key') THEN
+        ALTER TABLE public.push_subscriptions ADD CONSTRAINT push_subscriptions_user_id_endpoint_key UNIQUE (user_id, endpoint);
+    END IF;
+END $$;
 
 -- ==========================================
 -- 5. TABELA: medication_reminders (Nova Arquitetura)

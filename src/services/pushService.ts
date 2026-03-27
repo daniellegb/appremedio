@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 export const pushService = {
   async saveSubscription(userId: string, subscription: PushSubscription) {
     const subData = subscription.toJSON();
+    const endpoint = subData.endpoint;
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
     const { data, error } = await supabase
@@ -11,8 +12,9 @@ export const pushService = {
       .upsert({
         user_id: userId,
         subscription: subData,
+        endpoint: endpoint,
         timezone: timezone
-      }, { onConflict: 'user_id, subscription' });
+      }, { onConflict: 'user_id, endpoint' });
 
     if (error) throw error;
     return data;
@@ -22,7 +24,7 @@ export const pushService = {
     const { error } = await supabase
       .from('push_subscriptions')
       .delete()
-      .filter('subscription->>endpoint', 'eq', endpoint);
+      .eq('endpoint', endpoint);
 
     if (error) throw error;
   },
@@ -60,8 +62,13 @@ export const pushService = {
   },
 
   async sendTestNotification(userId: string) {
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
     const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
-      body: { test: true, userId }
+      body: { test: true, userId },
+      headers: {
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`
+      }
     });
     if (error) throw error;
     return data;
