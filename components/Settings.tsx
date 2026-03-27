@@ -86,10 +86,12 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
       }
     } catch (error: any) {
       console.error("Erro ao gerenciar notificações push:", error);
+      const errorMessage = error.message || error.description || String(error);
+      
       if (error.message === 'Permission not granted' || error.name === 'NotAllowedError') {
         alert("Permissão de notificação negada. Ative as notificações para receber lembretes.");
       } else {
-        alert("Erro ao configurar notificações. Verifique se você está em uma conexão segura (HTTPS) e se as permissões do navegador permitem notificações.");
+        alert(`Erro ao configurar notificações: ${errorMessage}. Verifique se você está em uma conexão segura (HTTPS) e se as permissões do navegador permitem notificações.`);
       }
     } finally {
       setIsPushLoading(false);

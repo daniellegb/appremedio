@@ -149,7 +149,7 @@ BEGIN
 
     -- Políticas para push_subscriptions
     DROP POLICY IF EXISTS "Users can manage own subscriptions" ON public.push_subscriptions;
-    CREATE POLICY "Users can manage own subscriptions" ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id);
+    CREATE POLICY "Users can manage own subscriptions" ON public.push_subscriptions FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
     -- Políticas para medication_reminders
     DROP POLICY IF EXISTS "Users can manage own reminders" ON public.medication_reminders;

@@ -83,6 +83,23 @@ export const subscribeUser = async (userId: string, vapidPublicKey: string) => {
 
     let subscription = await registration.pushManager.getSubscription();
     
+    // Se já existe uma subscrição, vamos verificar se a chave é a mesma.
+    // Se as chaves mudaram, precisamos cancelar a antiga e criar uma nova.
+    if (subscription) {
+      const currentKey = subscription.options.applicationServerKey;
+      const newKey = urlBase64ToUint8Array(vapidPublicKey);
+      
+      // Comparar as chaves (Uint8Array)
+      const keysMatch = currentKey && 
+        currentKey.byteLength === newKey.byteLength &&
+        newKey.every((val, i) => val === new Uint8Array(currentKey)[i]);
+        
+      if (!keysMatch) {
+        await subscription.unsubscribe();
+        subscription = null;
+      }
+    }
+    
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
