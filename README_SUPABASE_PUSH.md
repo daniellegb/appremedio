@@ -25,8 +25,19 @@ Execute o conteúdo do arquivo `supabase/migrations/20260313_push_notifications_
 ## 3. Frontend
 Certifique-se de que a variável `VITE_VAPID_PUBLIC_KEY` está configurada no seu ambiente de desenvolvimento/produção (Vercel).
 
-## 4. Como funciona
+## 4. Agendamento Gratuito (Cron Job)
+
+Como o plano gratuito da Vercel limita cron jobs a 1x por dia e o Supabase Free não inclui `pg_cron`, a melhor forma de manter o sistema funcionando a cada minuto gratuitamente é usar um serviço externo de "pinger":
+
+1.  Acesse **[cron-job.org](https://cron-job.org/)** (Gratuito e ilimitado).
+2.  Crie um novo job:
+    *   **URL:** `https://<SUA_REF_PROJETO>.supabase.co/functions/v1/send-reminder-notifications`
+    *   **Schedule:** Every 1 minute.
+    *   **Headers:** Adicione um header `Authorization` com o valor `Bearer <SUA_SERVICE_ROLE_KEY>`.
+3.  Isso ativará sua Edge Function a cada minuto sem custos.
+
+## 5. Como funciona
 - Quando um usuário salva um medicamento, o frontend chama `pushService.syncMedicationReminders`.
 - Isso limpa e recria os horários na tabela `medication_reminders`.
-- O `pg_cron` do Supabase chama a Edge Function a cada minuto.
+- O serviço externo (ou `pg_cron` se pago) chama a Edge Function a cada minuto.
 - A Edge Function busca lembretes para o minuto atual e envia o Push para todos os dispositivos registrados do usuário.
