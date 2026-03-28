@@ -62,8 +62,15 @@ export const pushService = {
   },
 
   async sendTestNotification(userId: string) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+    
     const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
-      body: { test: true, userId }
+      body: { test: true, userId },
+      headers: {
+        'apikey': anonKey,
+        'Authorization': `Bearer ${session?.access_token || anonKey}`
+      }
     });
     if (error) throw error;
     return data;
