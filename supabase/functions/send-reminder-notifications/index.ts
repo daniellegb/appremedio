@@ -118,7 +118,7 @@ serve(async (req) => {
             } catch (err) {
               console.error(`Error sending push:`, err)
               if (err.statusCode === 410 || err.statusCode === 404) {
-                await supabase.from('push_subscriptions').delete().eq('subscription->>endpoint', subscription.endpoint)
+                await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint)
               }
             }
           }
