@@ -62,13 +62,8 @@ export const pushService = {
   },
 
   async sendTestNotification(userId: string) {
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
     const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
-      body: { test: true, userId },
-      headers: {
-        'apikey': anonKey,
-        'Authorization': `Bearer ${anonKey}`
-      }
+      body: { test: true, userId }
     });
     if (error) throw error;
     return data;
