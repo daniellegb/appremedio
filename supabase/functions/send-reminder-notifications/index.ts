@@ -200,9 +200,10 @@ serve(async (req) => {
 
           if (userTime === reminderTimeShort) {
             try {
+              const bodyMessage = reminder.message_template || `Lembrete: Tomar ${reminder.medication_name}`;
               await webpush.sendNotification(subscription, JSON.stringify({
                 title: 'Hora do Medicamento 💊',
-                body: `Lembrete: Tomar ${reminder.medication_name}`,
+                body: bodyMessage,
                 url: '/dashboard'
               }))
               results.push({ type: 'medication', id: reminder.id })

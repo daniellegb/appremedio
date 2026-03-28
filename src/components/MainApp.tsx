@@ -28,7 +28,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   thresholdExpiring: 3,
   thresholdRunningOut: 3,
   showDelayDisclaimer: true,
-  showGreeting: true
+  showGreeting: true,
+  preNotificationMinutes: 5
 };
 
 const MainApp: React.FC = () => {
@@ -72,6 +73,14 @@ const MainApp: React.FC = () => {
     return { ...DEFAULT_SETTINGS, ...loaded };
   });
 
+  useEffect(() => {
+    if (user && meds.length > 0) {
+      pushService.syncMedicationReminders(user.id, meds, settings.preNotificationMinutes).catch(err => 
+        console.error('Erro ao sincronizar lembretes após mudança de configuração:', err)
+      );
+    }
+  }, [user, meds, settings.preNotificationMinutes]);
+
   const fetchData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -84,13 +93,6 @@ const MainApp: React.FC = () => {
       setMeds(medsData);
       setDoses(dosesData);
       setAppointments(appointmentsData);
-      
-      // Sync push reminders on load
-      if (medsData.length > 0) {
-        pushService.syncMedicationReminders(user.id, medsData).catch(err => 
-          console.error('Erro ao sincronizar lembretes:', err)
-        );
-      }
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
     } finally {

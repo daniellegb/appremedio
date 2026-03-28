@@ -62,6 +62,7 @@ export interface AppSettings {
   thresholdRunningOut: number;
   showDelayDisclaimer: boolean;
   showGreeting: boolean;
+  preNotificationMinutes: number;
 }
 
 export interface Profile {

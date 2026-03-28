@@ -35,7 +35,7 @@ export const pushService = {
     if (error) throw error;
   },
 
-  async syncMedicationReminders(userId: string, medications: any[]) {
+  async syncMedicationReminders(userId: string, medications: any[], preNotificationMinutes: number = 0) {
     // 1. Remover lembretes antigos
     await supabase
       .from('medication_reminders')
@@ -48,13 +48,38 @@ export const pushService = {
     medications.forEach(med => {
       if (med.times && Array.isArray(med.times)) {
         med.times.forEach((time: string) => {
+          // Lembrete na hora exata
           reminders.push({
             user_id: userId,
             medication_id: med.id,
             medication_name: med.name,
             reminder_time: time,
-            active: true
+            active: true,
+            message_template: `Hora de tomar ${med.name}`
           });
+
+          // Lembrete antecipado (se configurado)
+          if (preNotificationMinutes > 0) {
+            const [hours, minutes] = time.split(':').map(Number);
+            const date = new Date();
+            date.setHours(hours, minutes, 0, 0);
+            date.setMinutes(date.getMinutes() - preNotificationMinutes);
+            
+            const preTime = date.toLocaleTimeString('pt-BR', { 
+              hour: '2-digit', 
+              minute: '2-digit', 
+              hour12: false 
+            });
+
+            reminders.push({
+              user_id: userId,
+              medication_id: med.id,
+              medication_name: med.name,
+              reminder_time: preTime,
+              active: true,
+              message_template: `Faltam ${preNotificationMinutes} minutos para tomar ${med.name}`
+            });
+          }
         });
       }
     });

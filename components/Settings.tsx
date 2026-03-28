@@ -42,14 +42,14 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
 
     // Check if we are in an iframe (AI Studio Preview)
     const isInIframe = window.self !== window.top;
-    if (isInIframe && Notification.permission === 'default') {
-      alert("Para ativar as notificações no AI Studio, por favor abra o aplicativo em uma nova aba usando o botão no canto superior direito.");
-      return;
+    if (isInIframe) {
+      alert("⚠️ ATENÇÃO: Notificações costumam ser bloqueadas dentro do preview do AI Studio.\n\nPor favor, abra o aplicativo em uma NOVA ABA (botão no canto superior direito) para configurar e receber notificações no computador.");
+      if (Notification.permission === 'default') return;
     }
 
     // Check if permission was previously denied
     if (Notification.permission === 'denied') {
-      alert("As notificações foram bloqueadas. Por favor, redefina as permissões nas configurações do seu navegador (clique no cadeado ao lado da URL). Se você estiver no AI Studio, tente abrir o app em uma nova aba.");
+      alert("As notificações foram bloqueadas. Por favor, redefina as permissões nas configurações do seu navegador (clique no cadeado ao lado da URL).");
       return;
     }
 
@@ -286,7 +286,7 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                 </div>
                 <div>
                   <div className="font-bold text-slate-700">Notificações Push</div>
-                  <div className="text-xs text-slate-400">Lembretes no navegador</div>
+                  <div className="text-xs text-slate-400">Ativa notificações no celular</div>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -349,6 +349,29 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                 >
                   <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${pushEnabled ? 'right-1' : 'left-1'}`} />
                 </button>
+              </div>
+            </div>
+
+            <div className={`flex items-center justify-between gap-4 pt-4 border-t border-slate-50 transition-opacity ${!pushEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-50 text-blue-500 rounded-lg">
+                  <Bell size={20} />
+                </div>
+                <div>
+                  <div className="font-bold text-slate-700 text-sm md:text-base">Aviso Antecipado</div>
+                  <div className="text-[10px] md:text-xs text-slate-400">Minutos antes do horário</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="number" 
+                  min="0"
+                  max="60"
+                  className="w-16 md:w-20 bg-slate-50 border-none rounded-xl px-2 md:px-4 py-2 text-center font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
+                  value={settings.preNotificationMinutes}
+                  onChange={e => onUpdateSettings({ ...settings, preNotificationMinutes: Math.min(60, Math.max(0, parseInt(e.target.value) || 0)) })}
+                />
+                <span className="text-xs font-bold text-slate-400">min</span>
               </div>
             </div>
           </div>
