@@ -68,18 +68,36 @@ export const pushService = {
   },
 
   async sendTestNotification(userId: string) {
-    const { data: { session } } = await supabase.auth.getSession();
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-    
-    const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
-      body: { test: true, userId },
-      headers: {
-        'apikey': anonKey,
-        'Authorization': `Bearer ${session?.access_token || anonKey}`
+    try {
+      const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
+        body: { test: true, userId }
+      });
+      
+      if (error) {
+        console.error("Erro detalhado da Edge Function:", error);
+        // Se for erro de autenticação (401), pode ser que o JWT não esteja sendo enviado ou seja inválido
+        if (error.status === 401) {
+          throw new Error("Não autorizado (401). Verifique se você está logado e se a função foi implantada corretamente.");
+        }
+        throw error;
       }
-    });
-    if (error) throw error;
-    return data;
+      return data;
+    } catch (err: any) {
+      console.error("Erro ao invocar Edge Function:", err);
+      throw err;
+    }
+  },
+
+  async getDebugInfo() {
+    try {
+      const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
+        method: 'GET',
+        headers: { 'x-debug-request': 'true' }
+      });
+      return { data, error };
+    } catch (err) {
+      return { error: err };
+    }
   }
 };
 

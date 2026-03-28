@@ -84,6 +84,13 @@ const MainApp: React.FC = () => {
       setMeds(medsData);
       setDoses(dosesData);
       setAppointments(appointmentsData);
+      
+      // Sync push reminders on load
+      if (medsData.length > 0) {
+        pushService.syncMedicationReminders(user.id, medsData).catch(err => 
+          console.error('Erro ao sincronizar lembretes:', err)
+        );
+      }
     } catch (error) {
       console.error('Erro ao buscar dados:', error);
     } finally {

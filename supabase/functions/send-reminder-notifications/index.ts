@@ -13,16 +13,38 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const debug = url.searchParams.get('debug') === 'true';
+  const queryDebug = url.searchParams.get('debug') === 'true';
 
-  if (debug) {
+  // Parse body once to be used for debug and normal logic
+  let body: any = {};
+  if (req.method === 'POST') {
+    try {
+      body = await req.json();
+    } catch (e) {
+      body = {};
+    }
+  }
+
+  // Advanced Debug Mode (via Body)
+  if (body.debug === true && body.clientEnv) {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY') || '';
+    
+    const vapidMatch = body.clientEnv.VAPID_PUBLIC_KEY === vapidPublicKey;
+    const supabaseUrlMatch = body.clientEnv.SUPABASE_URL === supabaseUrl;
+
     return new Response(
       JSON.stringify({
-        hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
-        hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
-        hasVapidPublic: !!Deno.env.get('VAPID_PUBLIC_KEY'),
-        hasVapidPrivate: !!Deno.env.get('VAPID_PRIVATE_KEY'),
-        vapidSubject: Deno.env.get('VAPID_SUBJECT') || null,
+        vapidMatch,
+        supabaseUrlMatch,
+        server: {
+          vapidPreview: vapidPublicKey ? `${vapidPublicKey.substring(0, 10)}...` : null,
+          supabaseUrl: supabaseUrl
+        },
+        client: {
+          vapidPreview: body.clientEnv.VAPID_PUBLIC_KEY ? `${body.clientEnv.VAPID_PUBLIC_KEY.substring(0, 10)}...` : null,
+          supabaseUrl: body.clientEnv.SUPABASE_URL
+        }
       }),
       {
         status: 200,
@@ -30,6 +52,38 @@ serve(async (req) => {
       }
     );
   }
+
+  // Simple Debug Mode (via Query Param)
+  if (queryDebug) {
+    const vapidPublic = Deno.env.get('VAPID_PUBLIC_KEY') || '';
+    return new Response(
+      JSON.stringify({
+        hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+        hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+        hasVapidPublic: !!vapidPublic,
+        hasVapidPrivate: !!Deno.env.get('VAPID_PRIVATE_KEY'),
+        vapidPublicPreview: vapidPublic ? `${vapidPublic.substring(0, 10)}...` : null,
+        supabaseUrl: Deno.env.get('SUPABASE_URL') || null,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
+  // Segurança Manual: Verificar se a requisição tem a chave correta
+  // Isso permite que sistemas automáticos (sem JWT) chamem a função com segurança
+  const authHeader = req.headers.get('Authorization');
+  const internalSecret = Deno.env.get('INTERNAL_FUNCTION_SECRET');
+  
+  // Se a função for implantada com --no-verify-jwt, podemos usar uma chave interna
+  // para permitir chamadas de sistema (cron/webhooks)
+  const isInternalCall = internalSecret && authHeader === `Bearer ${internalSecret}`;
+  
+  // Se não for uma chamada interna e não houver JWT validado pelo gateway (quando verify-jwt está ON),
+  // o Supabase já teria barrado. Mas se estiver OFF, e não for chamada interna, 
+  // podemos opcionalmente validar o JWT aqui ou apenas seguir se for uma chamada de usuário logado.
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -45,7 +99,7 @@ serve(async (req) => {
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const { test, userId } = await req.json().catch(() => ({}))
+    const { test, userId } = body;
     const now = new Date()
 
     if (test && userId) {

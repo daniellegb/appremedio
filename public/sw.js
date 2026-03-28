@@ -4,8 +4,8 @@ self.addEventListener('push', function(event) {
     const data = event.data.json();
     const options = {
       body: data.body,
-      icon: '/icon-192x192.png', // Certifique-se de que este ícone existe ou use um padrão
-      badge: '/badge-72x72.png',
+      icon: 'https://cdn-icons-png.flaticon.com/512/1048/1048953.png', // Generic medical icon
+      badge: 'https://cdn-icons-png.flaticon.com/512/1048/1048953.png',
       data: {
         url: data.url || '/'
       },
