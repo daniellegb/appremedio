@@ -110,6 +110,17 @@ serve(async (req) => {
         .eq('user_id', userId)
 
       if (subsError) throw subsError
+      
+      if (!subs || subs.length === 0) {
+        console.log(`No subscriptions found for user ${userId}`)
+        return new Response(JSON.stringify({ message: 'No subscriptions found for this user', count: 0 }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        })
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
 
       for (const { subscription } of subs) {
         try {
@@ -118,12 +129,19 @@ serve(async (req) => {
             body: 'Seu sistema de lembretes está funcionando corretamente!',
             url: '/dashboard'
           }))
+          successCount++;
         } catch (err) {
           console.error('Error sending test push:', err)
+          errorCount++;
         }
       }
 
-      return new Response(JSON.stringify({ message: 'Test notifications sent' }), {
+      return new Response(JSON.stringify({ 
+        message: `Test notifications processed: ${successCount} success, ${errorCount} failed`,
+        successCount,
+        errorCount,
+        totalFound: subs.length
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       })

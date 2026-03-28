@@ -67,6 +67,27 @@ export const pushService = {
     }
   },
 
+  async checkVapidMatch() {
+    try {
+      const clientVapid = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
+        body: { 
+          debug: true, 
+          clientEnv: { 
+            VAPID_PUBLIC_KEY: clientVapid,
+            SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL
+          } 
+        }
+      });
+      
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error("Erro ao verificar VAPID match:", err);
+      return null;
+    }
+  },
+
   async sendTestNotification(userId: string) {
     try {
       const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {

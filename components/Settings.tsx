@@ -296,11 +296,19 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                       if (!user) return;
                       setIsPushLoading(true);
                       try {
-                        await pushService.sendTestNotification(user.id);
-                        alert("Notificação de teste enviada! Verifique seu dispositivo.");
-                      } catch (error) {
+                        const result = await pushService.sendTestNotification(user.id);
+                        console.log("[Push Test Result]", result);
+                        
+                        if (result.totalFound === 0) {
+                          alert("Atenção: Nenhuma assinatura de notificação encontrada para este navegador. Tente desativar e ativar as notificações novamente.");
+                        } else if (result.errorCount > 0) {
+                          alert(`Enviado com problemas: ${result.successCount} sucesso, ${result.errorCount} falha(s). Verifique se o navegador está bloqueando as notificações.`);
+                        } else {
+                          alert("Notificação de teste enviada com sucesso! Verifique seu dispositivo.");
+                        }
+                      } catch (error: any) {
                         console.error("Erro ao enviar teste:", error);
-                        alert("Erro ao enviar notificação de teste. Verifique os logs da Edge Function.");
+                        alert(`Erro ao enviar notificação de teste: ${error.message || "Erro desconhecido"}`);
                       } finally {
                         setIsPushLoading(false);
                       }
