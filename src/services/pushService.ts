@@ -35,65 +35,80 @@ export const pushService = {
     if (error) throw error;
   },
 
+  // Bloqueio para evitar sincronizações simultâneas
+  _isSyncing: false,
+
   async syncMedicationReminders(userId: string, medications: any[], preNotificationMinutes: number = 0) {
-    // 1. Remover lembretes antigos
-    await supabase
-      .from('medication_reminders')
-      .delete()
-      .eq('user_id', userId);
+    if (this._isSyncing) return;
+    this._isSyncing = true;
 
-    // 2. Criar novos lembretes baseados nos horários dos medicamentos
-    const reminders: any[] = [];
-    
-    medications.forEach(med => {
-      if (med.times && Array.isArray(med.times)) {
-        med.times.forEach((time: string) => {
-          // Lembrete na hora exata
-          reminders.push({
-            user_id: userId,
-            medication_id: med.id,
-            medication_name: med.name,
-            reminder_time: time,
-            active: true,
-            message_template: `Hora de tomar ${med.name}`
-          });
+    try {
+      // 1. Remover lembretes antigos
+      await supabase
+        .from('medication_reminders')
+        .delete()
+        .eq('user_id', userId);
 
-          // Lembrete antecipado (se configurado)
-          if (preNotificationMinutes > 0) {
-            const [hours, minutes] = time.split(':').map(Number);
-            const date = new Date();
-            date.setHours(hours, minutes, 0, 0);
-            date.setMinutes(date.getMinutes() - preNotificationMinutes);
-            
-            const preTime = date.toLocaleTimeString('pt-BR', { 
-              hour: '2-digit', 
-              minute: '2-digit', 
-              hour12: false 
-            });
+      // 2. Criar novos lembretes baseados nos horários dos medicamentos
+      const reminders: any[] = [];
+      
+      medications.forEach(med => {
+        if (med.times && Array.isArray(med.times)) {
+          med.times.forEach((time: string) => {
+            // Normalizar horário para HH:mm
+            const [h, m] = time.split(':');
+            const normalizedTime = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`;
 
+            // Lembrete na hora exata
             reminders.push({
               user_id: userId,
               medication_id: med.id,
               medication_name: med.name,
-              reminder_time: preTime,
+              reminder_time: normalizedTime,
               active: true,
-              message_template: `Faltam ${preNotificationMinutes} minutos para tomar ${med.name}`
+              message_template: `Hora de tomar ${med.name}`
             });
-          }
-        });
+
+            // Lembrete antecipado (se configurado)
+            if (preNotificationMinutes > 0) {
+              const date = new Date();
+              date.setHours(parseInt(h), parseInt(m), 0, 0);
+              date.setMinutes(date.getMinutes() - preNotificationMinutes);
+              
+              const preH = String(date.getHours()).padStart(2, '0');
+              const preM = String(date.getMinutes()).padStart(2, '0');
+              const preTime = `${preH}:${preM}:00`;
+
+              reminders.push({
+                user_id: userId,
+                medication_id: med.id,
+                medication_name: med.name,
+                reminder_time: preTime,
+                active: true,
+                message_template: `Faltam ${preNotificationMinutes} minutos para tomar ${med.name}`
+              });
+            }
+          });
+        }
+      });
+
+      if (reminders.length > 0) {
+        // De-duplicar lembretes antes de inserir
+        const uniqueReminders = Array.from(new Map(reminders.map(r => 
+          [`${r.user_id}-${r.medication_id}-${r.reminder_time}-${r.message_template}`, r]
+        )).values());
+
+        // Usar upsert com onConflict para ser extra seguro contra erros 23505
+        const { error } = await supabase
+          .from('medication_reminders')
+          .upsert(uniqueReminders, { 
+            onConflict: 'user_id, medication_id, reminder_time, message_template' 
+          });
+          
+        if (error) throw error;
       }
-    });
-
-    if (reminders.length > 0) {
-      // De-duplicar lembretes antes de inserir para evitar erros de restrição de unicidade
-      const uniqueReminders = Array.from(new Map(reminders.map(r => 
-        [`${r.user_id}-${r.medication_id}-${r.reminder_time}-${r.message_template}`, r]
-      )).values());
-
-      const { error } = await supabase
-        .from('medication_reminders')
-        .insert(uniqueReminders);
-      if (error) throw error;
+    } finally {
+      this._isSyncing = false;
     }
   },
 
