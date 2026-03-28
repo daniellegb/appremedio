@@ -187,9 +187,17 @@ serve(async (req) => {
 
     // Processar lembretes recorrentes
     if (reminders && reminders.length > 0) {
-      for (const reminder of reminders) {
+      // De-duplicar lembretes em memória por segurança
+      const uniqueReminders = Array.from(new Map(reminders.map(r => 
+        [`${r.user_id}-${r.medication_id}-${r.reminder_time}-${r.message_template}`, r]
+      )).values());
+
+      for (const reminder of uniqueReminders) {
         const userSubs = allSubscriptions.filter(s => s.user_id === reminder.user_id)
-        for (const { subscription, timezone } of userSubs) {
+        // De-duplicar assinaturas pelo endpoint para evitar envio duplo no mesmo navegador
+        const uniqueSubs = Array.from(new Map(userSubs.map(s => [s.endpoint, s])).values());
+        
+        for (const { subscription, timezone } of uniqueSubs) {
           const userTime = now.toLocaleTimeString('pt-BR', {
             timeZone: timezone || 'UTC',
             hour12: false,

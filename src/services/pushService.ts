@@ -85,9 +85,14 @@ export const pushService = {
     });
 
     if (reminders.length > 0) {
+      // De-duplicar lembretes antes de inserir para evitar erros de restrição de unicidade
+      const uniqueReminders = Array.from(new Map(reminders.map(r => 
+        [`${r.user_id}-${r.medication_id}-${r.reminder_time}-${r.message_template}`, r]
+      )).values());
+
       const { error } = await supabase
         .from('medication_reminders')
-        .insert(reminders);
+        .insert(uniqueReminders);
       if (error) throw error;
     }
   },
