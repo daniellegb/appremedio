@@ -12,6 +12,25 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  const url = new URL(req.url);
+  const debug = url.searchParams.get('debug') === 'true';
+
+  if (debug) {
+    return new Response(
+      JSON.stringify({
+        hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+        hasServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+        hasVapidPublic: !!Deno.env.get('VAPID_PUBLIC_KEY'),
+        hasVapidPrivate: !!Deno.env.get('VAPID_PRIVATE_KEY'),
+        vapidSubject: Deno.env.get('VAPID_SUBJECT') || null,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
