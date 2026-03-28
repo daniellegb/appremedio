@@ -290,6 +290,28 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                 </div>
               </div>
               <div className="flex items-center gap-3">
+                <button 
+                  onClick={async () => {
+                    setIsPushLoading(true);
+                    try {
+                      const debug = await pushService.checkVapidMatch();
+                      console.log("[VAPID Check]", debug);
+                      if (debug?.vapidMatch) {
+                        alert("✅ Chaves VAPID sincronizadas! O navegador e o servidor estão usando a mesma chave.");
+                      } else {
+                        alert(`❌ Inconsistência detectada!\nServidor: ${debug?.server?.vapidPreview}\nCliente: ${debug?.client?.vapidPreview}\n\nVerifique suas variáveis de ambiente no Supabase e no Vercel/.env`);
+                      }
+                    } catch (error) {
+                      alert("Erro ao verificar chaves. Verifique se a Edge Function foi implantada com --no-verify-jwt");
+                    } finally {
+                      setIsPushLoading(false);
+                    }
+                  }}
+                  className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+                  title="Verificar Configuração"
+                >
+                  <RefreshCw size={18} className={isPushLoading ? 'animate-spin' : ''} />
+                </button>
                 {pushEnabled && (
                   <button 
                     onClick={async () => {
