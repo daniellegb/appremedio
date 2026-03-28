@@ -7,16 +7,22 @@ export const pushService = {
     const endpoint = subData.endpoint;
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
+    // Garantir que o endpoint seja enviado como uma coluna separada para o upsert
     const { data, error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id: userId,
         subscription: subData,
-        endpoint: endpoint,
+        endpoint: endpoint, // Coluna TEXT dedicada para unicidade
         timezone: timezone
-      }, { onConflict: 'user_id, endpoint' });
+      }, { 
+        onConflict: 'user_id, endpoint' // Agora o PostgreSQL encontrará o índice UNIQUE correspondente
+      });
 
-    if (error) throw error;
+    if (error) {
+      console.error("Erro ao salvar assinatura push:", error);
+      throw error;
+    }
     return data;
   },
 
