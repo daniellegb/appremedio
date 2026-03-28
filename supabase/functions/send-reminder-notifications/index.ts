@@ -187,9 +187,9 @@ serve(async (req) => {
 
     // Processar lembretes recorrentes
     if (reminders && reminders.length > 0) {
-      // De-duplicar lembretes em memória por segurança
+      // De-duplicar lembretes em memória por (user + med + time_hh_mm)
       const uniqueReminders = Array.from(new Map(reminders.map(r => 
-        [`${r.user_id}-${r.medication_id}-${r.reminder_time}-${r.message_template}`, r]
+        [`${r.user_id}-${r.medication_id}-${r.reminder_time.substring(0, 5)}`, r]
       )).values());
 
       for (const reminder of uniqueReminders) {

@@ -55,9 +55,9 @@ export const pushService = {
       medications.forEach(med => {
         if (med.times && Array.isArray(med.times)) {
           med.times.forEach((time: string) => {
-            // Normalizar horário para HH:mm
+            // Normalizar horário para HH:mm (sem segundos para evitar duplicatas de formato)
             const [h, m] = time.split(':');
-            const normalizedTime = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`;
+            const normalizedTime = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
 
             // Lembrete na hora exata
             reminders.push({
@@ -77,32 +77,35 @@ export const pushService = {
               
               const preH = String(date.getHours()).padStart(2, '0');
               const preM = String(date.getMinutes()).padStart(2, '0');
-              const preTime = `${preH}:${preM}:00`;
+              const preTime = `${preH}:${preM}`;
 
-              reminders.push({
-                user_id: userId,
-                medication_id: med.id,
-                medication_name: med.name,
-                reminder_time: preTime,
-                active: true,
-                message_template: `Faltam ${preNotificationMinutes} minutos para tomar ${med.name}`
-              });
+              // Só adiciona se for um horário diferente do exato
+              if (preTime !== normalizedTime) {
+                reminders.push({
+                  user_id: userId,
+                  medication_id: med.id,
+                  medication_name: med.name,
+                  reminder_time: preTime,
+                  active: true,
+                  message_template: `Faltam ${preNotificationMinutes} minutos para tomar ${med.name}`
+                });
+              }
             }
           });
         }
       });
 
       if (reminders.length > 0) {
-        // De-duplicar lembretes antes de inserir
+        // De-duplicar lembretes por (medication_id + reminder_time)
         const uniqueReminders = Array.from(new Map(reminders.map(r => 
-          [`${r.user_id}-${r.medication_id}-${r.reminder_time}-${r.message_template}`, r]
+          [`${r.medication_id}-${r.reminder_time}`, r]
         )).values());
 
-        // Usar upsert com onConflict para ser extra seguro contra erros 23505
+        // Usar upsert com onConflict para ser extra seguro
         const { error } = await supabase
           .from('medication_reminders')
           .upsert(uniqueReminders, { 
-            onConflict: 'user_id, medication_id, reminder_time, message_template' 
+            onConflict: 'user_id, medication_id, reminder_time' 
           });
           
         if (error) throw error;
