@@ -19,6 +19,7 @@ import { useLocation } from 'react-router-dom';
 import { getUpdatedStock } from '../domain/stock';
 import { getNextDoseAt } from '../domain/medicationRules';
 import { pushService } from '../services/pushService';
+import { settingsService } from '../services/settingsService';
 
 const STORAGE_KEYS = {
   SETTINGS: 'medmanager_v2_settings'
@@ -69,9 +70,49 @@ const MainApp: React.FC = () => {
 
   const [settings, setSettings] = useState<AppSettings>(() => {
     const loaded = loadData(STORAGE_KEYS.SETTINGS, DEFAULT_SETTINGS);
-    // Merge with defaults to ensure new fields like showGreeting are present
     return { ...DEFAULT_SETTINGS, ...loaded };
   });
+
+  // Sincronizar configurações com o Supabase
+  useEffect(() => {
+    if (!user) return;
+
+    const syncSettings = async () => {
+      try {
+        const remoteSettings = await settingsService.getSettings(user.id);
+        if (remoteSettings) {
+          setSettings(prev => ({ ...prev, ...remoteSettings }));
+        } else {
+          // Se não houver configurações remotas, salva as locais
+          await settingsService.updateSettings(user.id, settings);
+        }
+      } catch (error) {
+        console.error('Erro ao sincronizar configurações:', error);
+      }
+    };
+
+    syncSettings();
+
+    // Inscrever para mudanças em tempo real
+    const subscription = settingsService.subscribeToSettings(user.id, (newSettings) => {
+      setSettings(prev => ({ ...prev, ...newSettings }));
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [user]);
+
+  const handleUpdateSettings = async (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    if (user) {
+      try {
+        await settingsService.updateSettings(user.id, newSettings);
+      } catch (error) {
+        console.error('Erro ao salvar configurações remotas:', error);
+      }
+    }
+  };
 
   useEffect(() => {
     if (user && meds.length > 0) {
@@ -308,7 +349,7 @@ const MainApp: React.FC = () => {
           settings={settings} 
           onToggleDose={handleToggleDose} 
           onEditMed={handleEditMedication}
-          onUpdateSettings={setSettings}
+          onUpdateSettings={handleUpdateSettings}
           onDeleteAppointment={handleDeleteAppointment}
           onEditAppointment={(app) => { setEditingAppointment(app); setView('add-appointment'); }}
           onAddMed={(cat) => { setEditingMedication(null); setInitialMedCategory(cat); setView('add-med'); }}
@@ -326,7 +367,7 @@ const MainApp: React.FC = () => {
       case 'settings':
         return <Settings 
           settings={settings} 
-          onUpdateSettings={setSettings} 
+          onUpdateSettings={handleUpdateSettings} 
           onClearData={() => {
             openConfirm(
               'Limpar Dados',
@@ -345,8 +386,8 @@ const MainApp: React.FC = () => {
           appointments={appointments} 
           settings={settings} 
           onToggleDose={handleToggleDose} 
-          onEditMed={handleEditMedication} 
-          onUpdateSettings={setSettings} 
+          onEditMed={handleEditMedication}
+          onUpdateSettings={handleUpdateSettings}
           onDeleteAppointment={handleDeleteAppointment}
           onEditAppointment={(app) => { setEditingAppointment(app); setView('add-appointment'); }}
           onAddMed={(cat) => { setEditingMedication(null); setInitialMedCategory(cat); setView('add-med'); }}
