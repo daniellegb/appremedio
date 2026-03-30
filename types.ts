@@ -26,6 +26,7 @@ export interface Medication {
   notes?: string;
   color: string;
   next_dose_at?: string; // ISO string
+  advanceMinutes?: number;
 }
 
 export interface PushSubscriptionData {

@@ -94,6 +94,12 @@ const Medications: React.FC<Props> = ({ meds, settings, onAdd, onEdit, onDelete 
                   <p className="text-sm text-slate-500 font-medium truncate">
                     {med.dosage} • {med.usageCategory === 'prn' ? 'Se necessário' : (med.dosesPerDay || '1x por dia')}
                   </p>
+                  {med.advanceMinutes && med.advanceMinutes > 0 && (
+                    <div className="flex items-center gap-1 text-[10px] text-blue-600 font-bold uppercase tracking-tight mt-0.5">
+                      <Clock size={10} />
+                      Aviso: {med.advanceMinutes} min antes
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -31,7 +31,8 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
     currentStock: 30,
     expiryDate: '',
     notes: '',
-    color: COLORS[0]
+    color: COLORS[0],
+    advanceMinutes: 0
   });
 
   useEffect(() => {
@@ -54,7 +55,8 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
         currentStock: initialData.currentStock,
         expiryDate: initialData.expiryDate || '',
         notes: initialData.notes || '',
-        color: initialData.color
+        color: initialData.color,
+        advanceMinutes: initialData.advanceMinutes || 0
       });
     }
   }, [initialData]);
@@ -447,6 +449,36 @@ const AddMedication: React.FC<Props> = ({ onSave, onCancel, initialData, initial
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-2">
+          <label className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><Clock size={14} /> Aviso Antecipado</label>
+          <div className="flex items-center gap-4">
+            <select 
+              className="flex-1 bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer text-sm font-bold"
+              value={formData.advanceMinutes}
+              onChange={e => setFormData({...formData, advanceMinutes: parseInt(e.target.value)})}
+            >
+              <option value={0}>Sem aviso antecipado</option>
+              <option value={5}>5 minutos antes</option>
+              <option value={10}>10 minutos antes</option>
+              <option value={15}>15 minutos antes</option>
+              <option value={30}>30 minutos antes</option>
+              <option value={60}>1 hora antes</option>
+            </select>
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+              <AlertCircle size={20} />
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-400 font-medium italic mt-1">
+            Receba um lembrete extra antes do horário principal da dose.
+          </p>
+        </div>
+
+        {/* 4. OBSERVAÇÕES */}
+        <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-2">
+          <label className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><FileText size={14} /> Observações</label>
+          <textarea className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all" rows={3} placeholder="Instruções extras (Ex: Ingerir com água)" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
         </div>
 
         <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:bg-blue-700 hover:shadow-blue-200 transition-all active:scale-[0.98]">
