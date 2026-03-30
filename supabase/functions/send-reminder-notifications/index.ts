@@ -91,7 +91,12 @@ serve(async (req) => {
 
     if (claimError) {
       console.error('Error claiming jobs via RPC:', claimError)
-      throw claimError
+      return new Response(JSON.stringify({ 
+        error: `Erro ao buscar jobs do banco: ${claimError.message}. Certifique-se de que a função RPC 'claim_notification_jobs' foi criada no SQL Editor.` 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      })
     }
 
     if (!claimedJobs || claimedJobs.length === 0) {

@@ -50,9 +50,27 @@ export const pushService = {
         method: 'POST',
         body: {}
       });
-      if (error) throw error;
+
+      if (error) {
+        console.error('Edge Function Error Object:', error);
+        
+        // Tenta extrair a mensagem de erro do corpo da resposta (JSON)
+        let detailedMessage = error.message;
+        try {
+          // No Supabase JS v2, o erro de invoke pode conter o contexto da resposta
+          const errorResponse = await error.context?.json();
+          if (errorResponse?.error) {
+            detailedMessage = errorResponse.error;
+          }
+        } catch (e) {
+          // Se não conseguir ler o JSON, mantém a mensagem original
+        }
+
+        throw new Error(detailedMessage || 'Erro desconhecido na Edge Function');
+      }
+      
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error processing notification queue:', error);
       throw error;
     }
