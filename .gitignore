@@ -25,4 +25,6 @@ dist-ssr
 
 VAPID_KEY.txt
 VAPID_CHANGE_GUIDE.md
+.env.example
+
 

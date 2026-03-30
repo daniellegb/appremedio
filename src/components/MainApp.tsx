@@ -117,7 +117,16 @@ const MainApp: React.FC = () => {
   useEffect(() => {
     // A sincronização agora é automática via banco de dados (notification_jobs)
     console.log('Medication reminders are handled by DB triggers.');
-  }, [user, meds, settings.preNotificationMinutes]);
+    
+    // Simular um worker de segundo plano enquanto o app está aberto
+    const interval = setInterval(() => {
+      if (user) {
+        pushService.processQueue().catch(err => console.error('Background queue processing error:', err));
+      }
+    }, 60000); // A cada 1 minuto
+
+    return () => clearInterval(interval);
+  }, [user]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -140,7 +149,10 @@ const MainApp: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    if (user) {
+      pushService.processQueue().catch(err => console.log('Initial queue processing:', err));
+    }
+  }, [fetchData, user]);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;

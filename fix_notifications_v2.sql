@@ -22,6 +22,8 @@ ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS attempts integer D
 ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS max_attempts integer DEFAULT 3;
 ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS error_message text;
 ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS processed_at timestamptz;
+ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 
 -- 3. Index para performance do worker
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_status_trigger ON public.notification_jobs (status, trigger_at) WHERE status = 'pending';
@@ -73,52 +75,74 @@ DECLARE
     normalized_dose timestamp;
     dose_tag text;
 BEGIN
+    -- Se o medicamento foi deletado ou desativado (se houver campo), poderíamos limpar jobs aqui.
+    -- Mas como temos ON DELETE CASCADE na coluna medication_id (que vamos garantir abaixo), 
+    -- o PostgreSQL cuida disso.
+
     IF NEW.next_dose_at IS NOT NULL THEN
         -- Normalizamos para o minuto para consistência na idempotency_key
         normalized_dose := date_trunc('minute', NEW.next_dose_at);
         dose_tag := 'med_' || NEW.id || '_' || to_char(normalized_dose, 'YYYYMMDDHH24MI');
         
         -- JOB 1: Notificação na Hora da Dose
-        INSERT INTO public.notification_jobs (user_id, type, payload, trigger_at, idempotency_key)
+        INSERT INTO public.notification_jobs (user_id, medication_id, type, payload, trigger_at, idempotency_key)
         VALUES (
             NEW.user_id,
+            NEW.id,
             'medication_next_dose',
             jsonb_build_object(
                 'title', 'Hora do Medicamento 💊',
                 'body', 'Tomar ' || NEW.name || COALESCE(' (' || NEW.dosage || ')', ''),
                 'tag', dose_tag,
-                'url', '/dashboard'
+                'url', '/dashboard',
+                'medication_id', NEW.id
             ),
             NEW.next_dose_at,
             'now:' || dose_tag
         )
-        ON CONFLICT (idempotency_key) DO NOTHING;
+        ON CONFLICT (idempotency_key) DO UPDATE SET
+            payload = EXCLUDED.payload,
+            trigger_at = EXCLUDED.trigger_at,
+            updated_at = now();
 
         -- JOB 2: Aviso Antecipado (se configurado)
         IF NEW.advance_minutes > 0 THEN
             -- Calculamos o horário do aviso
             -- Se o aviso já passou, não criamos o job
             IF (NEW.next_dose_at - (NEW.advance_minutes * interval '1 minute')) > (now() - interval '1 minute') THEN
-                INSERT INTO public.notification_jobs (user_id, type, payload, trigger_at, idempotency_key)
+                INSERT INTO public.notification_jobs (user_id, medication_id, type, payload, trigger_at, idempotency_key)
                 VALUES (
                     NEW.user_id,
+                    NEW.id,
                     'medication_advance_warning',
                     jsonb_build_object(
                         'title', 'Lembrete Antecipado ⏰',
                         'body', 'Em ' || NEW.advance_minutes || ' min: ' || NEW.name,
                         'tag', dose_tag || '_adv',
-                        'url', '/dashboard'
+                        'url', '/dashboard',
+                        'medication_id', NEW.id
                     ),
                     NEW.next_dose_at - (NEW.advance_minutes * interval '1 minute'),
                     'adv:' || dose_tag
                 )
-                ON CONFLICT (idempotency_key) DO NOTHING;
+                ON CONFLICT (idempotency_key) DO UPDATE SET
+                    payload = EXCLUDED.payload,
+                    trigger_at = EXCLUDED.trigger_at,
+                    status = CASE 
+                        WHEN public.notification_jobs.status = 'sent' THEN 'sent'
+                        ELSE 'pending'
+                    END,
+                    updated_at = now();
             END IF;
         END IF;
     END IF;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- 6.1 Garantir coluna medication_id e CASCADE
+ALTER TABLE public.notification_jobs ADD COLUMN IF NOT EXISTS medication_id UUID REFERENCES public.medications(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_notification_jobs_medication_id ON public.notification_jobs(medication_id);
 
 -- 7. Ativar o Trigger
 DROP TRIGGER IF EXISTS on_medication_upsert ON public.medications;

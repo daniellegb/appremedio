@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from '../types';
-import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil, Play } from 'lucide-react';
+import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil, Play, Bug } from 'lucide-react';
 import { calculateDaysOfStockLeft } from '../src/domain/stock';
 import { isMedicationExpired, getDaysUntilExpiry, calculatePeriodDoses } from '../src/domain/medicationRules';
 import { greetingService } from '../src/domain/greetings/greetingService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '../src/hooks/useAuth';
 import { pushService } from '../src/services/pushService';
+import { supabase } from '../src/lib/supabase';
 
 interface Props {
   meds: Medication[];
@@ -43,6 +44,40 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
   }, [settings.showGreeting, profile?.mode, user?.created_at]);
   const [selectedPrnMed, setSelectedPrnMed] = useState<Medication | null>(null);
   const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+  const [debugJobs, setDebugJobs] = useState<any[]>([]);
+  const [debugSubs, setDebugSubs] = useState<any[]>([]);
+  const [vapidStatus, setVapidStatus] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
+
+  const fetchDebugJobs = async () => {
+    if (!user) return;
+    try {
+      const [jobsRes, subsRes, vapidRes] = await Promise.all([
+        supabase
+          .from('notification_jobs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('trigger_at', { ascending: true })
+          .limit(10),
+        supabase
+          .from('push_subscriptions')
+          .select('*')
+          .eq('user_id', user.id),
+        pushService.checkVapidMatch()
+      ]);
+      setDebugJobs(jobsRes.data || []);
+      setDebugSubs(subsRes.data || []);
+      setVapidStatus(vapidRes);
+    } catch (err) {
+      console.error('Error fetching debug info:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (showDebug && user) {
+      fetchDebugJobs();
+    }
+  }, [showDebug, user]);
 
   const handleProcessQueue = async () => {
     setIsProcessingQueue(true);
@@ -272,15 +307,96 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
             </p>
           )}
         </div>
-        <button 
-          onClick={handleProcessQueue}
-          disabled={isProcessingQueue}
-          className={`p-3 rounded-2xl border border-slate-100 shadow-sm transition-all active:scale-95 ${isProcessingQueue ? 'bg-slate-50 text-slate-300' : 'bg-white text-slate-400 hover:text-blue-600 hover:border-blue-100'}`}
-          title="Sincronizar Notificações"
-        >
-          <Play size={20} fill={isProcessingQueue ? "currentColor" : "none"} className={isProcessingQueue ? "animate-spin" : ""} />
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="p-3 rounded-2xl border border-slate-100 shadow-sm bg-white text-slate-400 hover:text-purple-600 hover:border-purple-100"
+            title="Debug Notificações"
+          >
+            <Bug size={20} />
+          </button>
+          <button 
+            onClick={handleProcessQueue}
+            disabled={isProcessingQueue}
+            className={`p-3 rounded-2xl border border-slate-100 shadow-sm transition-all active:scale-95 ${isProcessingQueue ? 'bg-slate-50 text-slate-300' : 'bg-white text-slate-400 hover:text-blue-600 hover:border-blue-100'}`}
+            title="Sincronizar Notificações"
+          >
+            <Play size={20} fill={isProcessingQueue ? "currentColor" : "none"} className={isProcessingQueue ? "animate-spin" : ""} />
+          </button>
+        </div>
       </header>
+
+      {showDebug && (
+        <div className="bg-slate-900 text-slate-100 p-6 rounded-[32px] shadow-xl font-mono text-xs overflow-auto max-h-96">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-bold text-purple-400">Debug de Notificações</h3>
+            <button onClick={() => fetchDebugJobs()} className="text-blue-400 underline">Atualizar</button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-slate-400 mb-1 uppercase tracking-wider">Seus Medicamentos:</p>
+              <div className="space-y-2">
+                {meds.map(med => (
+                  <div key={med.id} className="border-l-2 border-blue-500 pl-3 py-1 bg-slate-800/50 rounded-r-lg">
+                    <p className="font-bold text-blue-300">{med.name}</p>
+                    <p>Próxima Dose: {med.next_dose_at ? new Date(med.next_dose_at).toLocaleString('pt-BR') : 'N/A'}</p>
+                    <p>Aviso Antecipado: {med.advanceMinutes || 0} min</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-slate-400 mb-1 uppercase tracking-wider">Status VAPID:</p>
+              {vapidStatus ? (
+                <div className={`border-l-2 ${vapidStatus.match ? 'border-green-500' : 'border-red-500'} pl-3 py-1 bg-slate-800/50 rounded-r-lg`}>
+                  <p className={vapidStatus.match ? 'text-green-300' : 'text-red-300'}>
+                    {vapidStatus.match ? '✅ Chaves VAPID coincidem' : '❌ Chaves VAPID não coincidem!'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">Public Key (Frontend): {vapidStatus.clientKey?.substring(0, 20)}...</p>
+                  <p className="text-[10px] text-slate-400">Public Key (Edge): {vapidStatus.serverKey?.substring(0, 20)}...</p>
+                </div>
+              ) : (
+                <p className="text-slate-500 italic">Verificando VAPID...</p>
+              )}
+            </div>
+            <div>
+              <p className="text-slate-400 mb-1 uppercase tracking-wider">Assinaturas Push:</p>
+              {debugSubs.length === 0 ? (
+                <p className="text-red-400 italic">Nenhuma assinatura encontrada. Ative as notificações em Ajustes.</p>
+              ) : (
+                <div className="space-y-2">
+                  {debugSubs.map(sub => (
+                    <div key={sub.id} className="border-l-2 border-green-500 pl-3 py-1 bg-slate-800/50 rounded-r-lg">
+                      <p className="text-green-300 truncate">Endpoint: {sub.endpoint}</p>
+                      <p className="text-[10px] text-slate-400">Timezone: {sub.timezone}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-slate-400 mb-1 uppercase tracking-wider">Próximos Jobs na Fila:</p>
+              {debugJobs.length === 0 ? (
+                <p className="text-slate-500 italic">Nenhum job pendente encontrado.</p>
+              ) : (
+                <div className="space-y-2">
+                  {debugJobs.map(job => (
+                    <div key={job.id} className="border-l-2 border-purple-500 pl-3 py-1 bg-slate-800/50 rounded-r-lg">
+                      <div className="flex justify-between">
+                        <span className="font-bold text-purple-300">{job.type}</span>
+                        <span className={job.status === 'pending' ? 'text-yellow-400' : 'text-green-400'}>{job.status}</span>
+                      </div>
+                      <p>Trigger: {new Date(job.trigger_at).toLocaleString('pt-BR')}</p>
+                      <p className="text-[10px] text-slate-400 truncate">Payload: {JSON.stringify(job.payload)}</p>
+                      {job.error_message && <p className="text-red-400">Erro: {job.error_message}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 gap-6">
