@@ -157,23 +157,6 @@ export const pushService = {
     }
   },
 
-  async processQueue() {
-    try {
-      const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
-        body: {}
-      });
-      
-      if (error) {
-        console.error("Erro ao processar fila:", error);
-        throw error;
-      }
-      return data;
-    } catch (err: any) {
-      console.error("Erro ao disparar worker:", err);
-      throw err;
-    }
-  },
-
   async getDebugInfo() {
     try {
       const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {

@@ -116,10 +116,9 @@ const MainApp: React.FC = () => {
 
   useEffect(() => {
     if (user && meds.length > 0) {
-      // Sincronização agora é feita via Triggers no Banco de Dados (notification_jobs)
-      // O worker processa a fila automaticamente.
+      pushService.syncMedicationReminders(user.id, meds, settings.preNotificationMinutes);
     }
-  }, [user, meds]);
+  }, [user, meds, settings.preNotificationMinutes]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;

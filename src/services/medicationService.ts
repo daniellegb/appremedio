@@ -23,8 +23,7 @@ const mapToCamelCase = (med: any): Medication => ({
   notes: med.notes,
   color: med.color,
   frequency: med.frequency || 1,
-  next_dose_at: med.next_dose_at,
-  advanceMinutes: med.advance_minutes || 0
+  next_dose_at: med.next_dose_at
 });
 
 const nullIfEmpty = (val: string | undefined | null) => {
@@ -70,8 +69,7 @@ export const medicationService = {
         color: data.color,
         frequency: data.frequency || 1,
         user_id: userId,
-        next_dose_at: nextDoseAt,
-        advance_minutes: data.advanceMinutes || 0
+        next_dose_at: nextDoseAt
       }])
       .select()
       .single();
@@ -101,7 +99,6 @@ export const medicationService = {
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.color !== undefined) updateData.color = data.color;
     if (data.frequency !== undefined) updateData.frequency = data.frequency;
-    if (data.advanceMinutes !== undefined) updateData.advance_minutes = data.advanceMinutes;
 
     // Recalcular próxima dose se campos relevantes mudarem
     if (data.times || data.intervalDays || data.usageCategory || data.startDate) {
