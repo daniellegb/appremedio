@@ -115,9 +115,8 @@ const MainApp: React.FC = () => {
   };
 
   useEffect(() => {
-    if (user && meds.length > 0) {
-      pushService.syncMedicationReminders(user.id, meds, settings.preNotificationMinutes);
-    }
+    // A sincronização agora é automática via banco de dados (notification_jobs)
+    console.log('Medication reminders are handled by DB triggers.');
   }, [user, meds, settings.preNotificationMinutes]);
 
   const fetchData = useCallback(async () => {
@@ -179,13 +178,11 @@ const MainApp: React.FC = () => {
         const updated = await medicationService.updateMedication(user.id, newMed.id, newMed);
         const newMeds = meds.map(m => m.id === updated.id ? updated : m);
         setMeds(newMeds);
-        await pushService.syncMedicationReminders(user.id, newMeds);
       } else {
         const finalMed = { ...newMed, color: newMed.color || COLORS[Math.floor(Math.random() * COLORS.length)] };
         const created = await medicationService.createMedication(user.id, finalMed);
         const newMeds = [created, ...meds];
         setMeds(newMeds);
-        await pushService.syncMedicationReminders(user.id, newMeds);
       }
       setEditingMedication(null);
       setView('meds');
@@ -205,7 +202,6 @@ const MainApp: React.FC = () => {
           const newMeds = meds.filter(m => m.id !== id);
           setMeds(newMeds);
           setDoses(prev => prev.filter(d => d.medicationId !== id));
-          await pushService.syncMedicationReminders(user.id, newMeds);
         } catch (error) {
           console.error('Erro ao excluir medicamento:', error);
         }

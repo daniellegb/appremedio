@@ -39,79 +39,22 @@ export const pushService = {
   _isSyncing: false,
 
   async syncMedicationReminders(userId: string, medications: any[], preNotificationMinutes: number = 0) {
-    if (this._isSyncing) return;
-    this._isSyncing = true;
+    // A criação de lembretes agora é feita via Trigger no Banco de Dados (notification_jobs)
+    // Não precisamos mais sincronizar manualmente via frontend.
+    console.log('Syncing medication reminders (handled by DB triggers)...');
+  },
 
+  async processQueue() {
     try {
-      // 1. Remover lembretes antigos
-      await supabase
-        .from('medication_reminders')
-        .delete()
-        .eq('user_id', userId);
-
-      // 2. Criar novos lembretes baseados nos horários dos medicamentos
-      const reminders: any[] = [];
-      
-      medications.forEach(med => {
-        if (med.times && Array.isArray(med.times)) {
-          med.times.forEach((time: string) => {
-            // Normalizar horário para HH:mm (sem segundos para evitar duplicatas de formato)
-            const [h, m] = time.split(':');
-            const normalizedTime = `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
-
-            // Lembrete na hora exata
-            reminders.push({
-              user_id: userId,
-              medication_id: med.id,
-              medication_name: med.name,
-              reminder_time: normalizedTime,
-              active: true,
-              message_template: `Hora de tomar ${med.name}`
-            });
-
-            // Lembrete antecipado (se configurado)
-            if (preNotificationMinutes > 0) {
-              const date = new Date();
-              date.setHours(parseInt(h), parseInt(m), 0, 0);
-              date.setMinutes(date.getMinutes() - preNotificationMinutes);
-              
-              const preH = String(date.getHours()).padStart(2, '0');
-              const preM = String(date.getMinutes()).padStart(2, '0');
-              const preTime = `${preH}:${preM}`;
-
-              // Só adiciona se for um horário diferente do exato
-              if (preTime !== normalizedTime) {
-                reminders.push({
-                  user_id: userId,
-                  medication_id: med.id,
-                  medication_name: med.name,
-                  reminder_time: preTime,
-                  active: true,
-                  message_template: `Faltam ${preNotificationMinutes} minutos para tomar ${med.name}`
-                });
-              }
-            }
-          });
-        }
+      const { data, error } = await supabase.functions.invoke('send-reminder-notifications', {
+        method: 'POST',
+        body: {}
       });
-
-      if (reminders.length > 0) {
-        // De-duplicar lembretes por (medication_id + reminder_time)
-        const uniqueReminders = Array.from(new Map(reminders.map(r => 
-          [`${r.medication_id}-${r.reminder_time}`, r]
-        )).values());
-
-        // Usar upsert com onConflict para ser extra seguro
-        const { error } = await supabase
-          .from('medication_reminders')
-          .upsert(uniqueReminders, { 
-            onConflict: 'user_id, medication_id, reminder_time' 
-          });
-          
-        if (error) throw error;
-      }
-    } finally {
-      this._isSyncing = false;
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error processing notification queue:', error);
+      throw error;
     }
   },
 

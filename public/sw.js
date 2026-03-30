@@ -4,8 +4,11 @@ self.addEventListener('push', function(event) {
     const data = event.data.json();
     const options = {
       body: data.body,
-      icon: 'https://cdn-icons-png.flaticon.com/512/1048/1048953.png', // Generic medical icon
+      icon: 'https://cdn-icons-png.flaticon.com/512/1048/1048953.png',
       badge: 'https://cdn-icons-png.flaticon.com/512/1048/1048953.png',
+      tag: data.tag || 'medication-reminder', // Previne duplicatas visuais
+      renotify: true, // Faz o celular vibrar mesmo se a tag for a mesma
+      vibrate: [200, 100, 200],
       data: {
         url: data.url || '/'
       },

@@ -42,6 +42,21 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
     return greetingService.getGreetingOfDay(mode, user?.created_at);
   }, [settings.showGreeting, profile?.mode, user?.created_at]);
   const [selectedPrnMed, setSelectedPrnMed] = useState<Medication | null>(null);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+
+  const handleProcessQueue = async () => {
+    setIsProcessingQueue(true);
+    try {
+      const result = await pushService.processQueue();
+      console.log('Fila processada:', result);
+      alert(`Fila processada com sucesso! Jobs: ${result.processed || 0}`);
+    } catch (error) {
+      alert('Erro ao processar fila. Verifique o console.');
+    } finally {
+      setIsProcessingQueue(false);
+    }
+  };
+
   const [prnStep, setPrnStep] = useState<'list' | 'choice' | 'custom'>('list');
   const [customPrnDate, setCustomPrnDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [customPrnTime, setCustomPrnTime] = useState(`${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`);
@@ -257,6 +272,14 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
             </p>
           )}
         </div>
+        <button 
+          onClick={handleProcessQueue}
+          disabled={isProcessingQueue}
+          className={`p-3 rounded-2xl border border-slate-100 shadow-sm transition-all active:scale-95 ${isProcessingQueue ? 'bg-slate-50 text-slate-300' : 'bg-white text-slate-400 hover:text-blue-600 hover:border-blue-100'}`}
+          title="Sincronizar Notificações"
+        >
+          <Play size={20} fill={isProcessingQueue ? "currentColor" : "none"} className={isProcessingQueue ? "animate-spin" : ""} />
+        </button>
       </header>
 
       {/* Stats Summary */}
