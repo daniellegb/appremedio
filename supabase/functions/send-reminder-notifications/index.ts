@@ -60,9 +60,17 @@ serve(async (req) => {
     const nowIso = now.toISOString()
     const todayStr = now.toISOString().split('T')[0]
 
-    // --- 1. MATERIALIZAÇÃO (Idempotente) ---
-    // Transformar lembretes, fila, medicamentos e consultas em Jobs únicos na tabela notification_jobs
+    // --- 1. MATERIALIZAÇÃO (Idempotente e Conservadora) ---
+    // Apenas materializar o que deve ser enviado no minuto atual.
+    // Isso evita o spam de notificações passadas se a idempotência falhar por falta de constraint.
     
+    // Buscar assinaturas para saber os timezones
+    const { data: allSubs } = await supabase
+      .from('push_subscriptions')
+      .select('user_id, timezone, endpoint')
+
+    const jobsToInsert = []
+
     // a) Lembretes recorrentes (medication_reminders)
     const { data: reminders } = await supabase
       .from('medication_reminders')
@@ -70,58 +78,65 @@ serve(async (req) => {
       .eq('active', true)
 
     if (reminders && reminders.length > 0) {
-      const jobsToInsert = reminders.map(r => {
+      for (const r of reminders) {
+        const userSubs = allSubs?.filter(s => s.user_id === r.user_id) || []
+        if (userSubs.length === 0) continue;
+
+        // Usar o timezone da primeira assinatura (ou UTC)
+        const timezone = userSubs[0].timezone || 'UTC'
+        const userTime = now.toLocaleTimeString('pt-BR', {
+          timeZone: timezone,
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit'
+        })
         const reminderTimeShort = r.reminder_time.substring(0, 5)
-        const idempotencyKey = `med_reminder:${r.id}:${todayStr}:${reminderTimeShort}`
-        const triggerAt = new Date(`${todayStr}T${r.reminder_time}Z`).toISOString()
 
-        return {
-          user_id: r.user_id,
-          payload: {
-            title: 'Hora do Medicamento 💊',
-            body: r.message_template || `Lembrete: Tomar ${r.medication_name}`,
-            url: '/dashboard',
-            type: 'medication_reminder',
-            medication_id: r.medication_id
-          },
-          idempotency_key: idempotencyKey,
-          trigger_at: triggerAt,
-          status: 'pending'
+        // SÓ MATERIALIZA SE FOR O MINUTO EXATO (ou janela de 1 min)
+        if (userTime === reminderTimeShort) {
+          const idempotencyKey = `med_reminder:${r.id}:${todayStr}:${reminderTimeShort}`
+          jobsToInsert.push({
+            user_id: r.user_id,
+            payload: {
+              title: 'Hora do Medicamento 💊',
+              body: r.message_template || `Lembrete: Tomar ${r.medication_name}`,
+              url: '/dashboard',
+              type: 'medication_reminder',
+              medication_id: r.medication_id
+            },
+            idempotency_key: idempotencyKey,
+            trigger_at: nowIso,
+            status: 'pending'
+          })
         }
-      })
-
-      await supabase.from('notification_jobs').upsert(jobsToInsert, { 
-        onConflict: 'idempotency_key',
-        ignoreDuplicates: true 
-      })
+      }
     }
 
     // b) Fila de notificações (notification_queue - one-off)
+    // Aqui ainda usamos a janela de tempo, mas apenas para itens não enviados
     const { data: queueItems } = await supabase
       .from('notification_queue')
       .select('*')
       .eq('sent', false)
       .lte('trigger_at', nowIso)
+      .gte('trigger_at', new Date(now.getTime() - 10 * 60000).toISOString()) // Janela de 10 min para segurança
 
     if (queueItems && queueItems.length > 0) {
-      const jobsToInsert = queueItems.map(q => ({
-        user_id: q.user_id,
-        payload: {
-          title: q.title,
-          body: q.body,
-          url: '/dashboard',
-          type: 'queue',
-          queue_id: q.id
-        },
-        idempotency_key: `queue:${q.id}`,
-        trigger_at: q.trigger_at,
-        status: 'pending'
-      }))
-
-      await supabase.from('notification_jobs').upsert(jobsToInsert, { 
-        onConflict: 'idempotency_key',
-        ignoreDuplicates: true 
-      })
+      for (const q of queueItems) {
+        jobsToInsert.push({
+          user_id: q.user_id,
+          payload: {
+            title: q.title,
+            body: q.body,
+            url: '/dashboard',
+            type: 'queue',
+            queue_id: q.id
+          },
+          idempotency_key: `queue:${q.id}`,
+          trigger_at: q.trigger_at,
+          status: 'pending'
+        })
+      }
     }
 
     // c) Medicamentos (medications - next_dose_at)
@@ -129,55 +144,70 @@ serve(async (req) => {
       .from('medications')
       .select('*')
       .lte('next_dose_at', nowIso)
+      .gte('next_dose_at', new Date(now.getTime() - 10 * 60000).toISOString()) // Janela de 10 min
       .not('next_dose_at', 'is', null)
 
     if (meds && meds.length > 0) {
-      const jobsToInsert = meds.map(m => ({
-        user_id: m.user_id,
-        payload: {
-          title: 'Hora do Medicamento 💊',
-          body: `Lembrete: Tomar ${m.name} (${m.dosage || ''})`,
-          url: '/dashboard',
-          type: 'medication_next_dose',
-          medication_id: m.id
-        },
-        idempotency_key: `med_next_dose:${m.id}:${m.next_dose_at}`,
-        trigger_at: m.next_dose_at,
-        status: 'pending'
-      }))
-
-      await supabase.from('notification_jobs').upsert(jobsToInsert, { 
-        onConflict: 'idempotency_key',
-        ignoreDuplicates: true 
-      })
+      for (const m of meds) {
+        jobsToInsert.push({
+          user_id: m.user_id,
+          payload: {
+            title: 'Hora do Medicamento 💊',
+            body: `Lembrete: Tomar ${m.name} (${m.dosage || ''})`,
+            url: '/dashboard',
+            type: 'medication_next_dose',
+            medication_id: m.id
+          },
+          idempotency_key: `med_next_dose:${m.id}:${m.next_dose_at}`,
+          trigger_at: m.next_dose_at,
+          status: 'pending'
+        })
+      }
     }
 
     // d) Consultas (appointments - próximas 24h)
-    const tomorrow = new Date(now)
-    tomorrow.setHours(tomorrow.getHours() + 24)
-    const tomorrowIso = tomorrow.toISOString()
-
+    // Só materializa se for 08:00 no timezone do usuário (ou UTC se não houver)
     const { data: appointments } = await supabase
       .from('appointments')
       .select('*')
-      .gte('date', todayStr)
-      .lte('date', tomorrowIso.split('T')[0])
+      .eq('date', todayStr)
     
     if (appointments && appointments.length > 0) {
-      const jobsToInsert = appointments.map(a => ({
-        user_id: a.user_id,
-        payload: {
-          title: `Lembrete de ${a.type || 'Consulta'} 🏥`,
-          body: `${a.doctor || 'Consulta'} agendada para ${a.date} às ${a.time || ''}`,
-          url: '/appointments',
-          type: 'appointment',
-          appointment_id: a.id
-        },
-        idempotency_key: `appointment:${a.id}:${a.date}`,
-        trigger_at: new Date(`${a.date}T08:00:00Z`).toISOString(), // Notificar às 8h da manhã do dia
-        status: 'pending'
-      }))
+      for (const a of appointments) {
+        const userSubs = allSubs?.filter(s => s.user_id === a.user_id) || []
+        const timezone = userSubs[0]?.timezone || 'UTC'
+        const userHour = now.toLocaleTimeString('pt-BR', {
+          timeZone: timezone,
+          hour12: false,
+          hour: '2-digit'
+        })
+        const userMinute = now.toLocaleTimeString('pt-BR', {
+          timeZone: timezone,
+          hour12: false,
+          minute: '2-digit'
+        })
 
+        // Notificar apenas às 08:00 da manhã do dia da consulta
+        if (userHour === '08' && userMinute === '00') {
+          jobsToInsert.push({
+            user_id: a.user_id,
+            payload: {
+              title: `Lembrete de ${a.type || 'Consulta'} 🏥`,
+              body: `${a.doctor || 'Consulta'} agendada para hoje às ${a.time || ''}`,
+              url: '/appointments',
+              type: 'appointment',
+              appointment_id: a.id
+            },
+            idempotency_key: `appointment:${a.id}:${a.date}`,
+            trigger_at: nowIso,
+            status: 'pending'
+          })
+        }
+      }
+    }
+
+    // Inserir jobs (ON CONFLICT DO NOTHING)
+    if (jobsToInsert.length > 0) {
       await supabase.from('notification_jobs').upsert(jobsToInsert, { 
         onConflict: 'idempotency_key',
         ignoreDuplicates: true 
