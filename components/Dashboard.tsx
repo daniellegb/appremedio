@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Medication, DoseEvent, Appointment, AppSettings, UsageCategory } from '../types';
-import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil } from 'lucide-react';
+import { CheckCircle2, Circle, Calendar as CalendarIcon, ChevronRight, Clock as ClockIcon, AlertTriangle, XCircle, AlertCircle, Pill, AlertOctagon, TestTubeDiagonal, MapPin, FileText, Map, Navigation, ChevronDown, ChevronUp, Stethoscope, Trash2, Pencil, Play } from 'lucide-react';
 import { calculateDaysOfStockLeft } from '../src/domain/stock';
 import { isMedicationExpired, getDaysUntilExpiry, calculatePeriodDoses } from '../src/domain/medicationRules';
 import { greetingService } from '../src/domain/greetings/greetingService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '../src/hooks/useAuth';
+import { pushService } from '../src/services/pushService';
 
 interface Props {
   meds: Medication[];
@@ -44,6 +45,21 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
   const [prnStep, setPrnStep] = useState<'list' | 'choice' | 'custom'>('list');
   const [customPrnDate, setCustomPrnDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [customPrnTime, setCustomPrnTime] = useState(`${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`);
+  const [isProcessingQueue, setIsProcessingQueue] = useState(false);
+
+  const handleProcessQueue = async () => {
+    if (isProcessingQueue) return;
+    setIsProcessingQueue(true);
+    try {
+      const result = await pushService.processQueue();
+      alert(`Fila processada com sucesso! ${result.processed || 0} notificações enviadas.`);
+    } catch (error) {
+      console.error('Erro ao processar fila:', error);
+      alert('Erro ao processar fila. Verifique os logs.');
+    } finally {
+      setIsProcessingQueue(false);
+    }
+  };
 
   const today = new Date();
   const now = new Date();
@@ -246,13 +262,30 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
 
   return (
     <div className="space-y-8 pb-20 md:pb-0">
-      <header>
-        <h2 className="text-xl sm:text-3xl font-bold text-slate-900 tracking-tight truncate sm:whitespace-normal">{welcomeMessage}</h2>
-        <p className="text-slate-500">Hoje é dia {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}</p>
-        {greeting && (
-          <p className="text-sm text-slate-400 mt-2 font-medium italic">
-            {greeting}
-          </p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl sm:text-3xl font-bold text-slate-900 tracking-tight truncate sm:whitespace-normal">{welcomeMessage}</h2>
+          <p className="text-slate-500">Hoje é dia {new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}</p>
+          {greeting && (
+            <p className="text-sm text-slate-400 mt-2 font-medium italic">
+              {greeting}
+            </p>
+          )}
+        </div>
+        
+        {user?.email === 'erhulegal@gmail.com' && (
+          <button
+            onClick={handleProcessQueue}
+            disabled={isProcessingQueue}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 shadow-lg shadow-blue-100"
+          >
+            {isProcessingQueue ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <Play size={16} fill="currentColor" />
+            )}
+            Processar Fila
+          </button>
         )}
       </header>
 

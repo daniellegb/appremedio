@@ -116,11 +116,10 @@ const MainApp: React.FC = () => {
 
   useEffect(() => {
     if (user && meds.length > 0) {
-      pushService.syncMedicationReminders(user.id, meds, settings.preNotificationMinutes).catch(err => 
-        console.error('Erro ao sincronizar lembretes após mudança de configuração:', err)
-      );
+      // Sincronização agora é feita via Triggers no Banco de Dados (notification_jobs)
+      // O worker processa a fila automaticamente.
     }
-  }, [user, meds, settings.preNotificationMinutes]);
+  }, [user, meds]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
