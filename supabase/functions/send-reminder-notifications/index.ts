@@ -17,6 +17,17 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
+  const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
+  const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
+
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    console.error('VAPID keys are missing in environment variables.')
+    return new Response(JSON.stringify({ error: 'VAPID keys are not configured in the Edge Function environment.' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    })
+  }
+
   // Parse body for manual test bypass
   let body: any = {};
   if (req.method === 'POST') {
@@ -30,8 +41,6 @@ serve(async (req) => {
   // --- 0. TEST NOTIFICATION (Bypass Queue) ---
   if (body.test && body.userId) {
     console.log(`Manual test requested for user: ${body.userId}`)
-    const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')!
-    const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')!
     const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:example@yourdomain.com'
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
 
@@ -71,8 +80,6 @@ serve(async (req) => {
   }
 
   try {
-    const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')!
-    const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')!
     const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:example@yourdomain.com'
     webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
 
@@ -158,7 +165,11 @@ serve(async (req) => {
     }
 
     // --- 5. CLEANUP (Optional per execution) ---
-    await supabase.rpc('cleanup_notification_jobs')
+    try {
+      await supabase.rpc('cleanup_notification_jobs')
+    } catch (cleanupErr) {
+      console.warn('Cleanup RPC failed (maybe not implemented):', cleanupErr.message)
+    }
 
     return new Response(JSON.stringify({ success: true, processed: claimedJobs.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

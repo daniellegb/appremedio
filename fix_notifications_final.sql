@@ -33,7 +33,21 @@ BEGIN
 END;
 $$;
 
--- 4. Trigger que gera a dose + o aviso antecipado com TAGS para evitar duplicatas visuais
+-- 4. RPC para Limpeza de Jobs Antigos (Opcional, mantém o banco limpo)
+CREATE OR REPLACE FUNCTION public.cleanup_notification_jobs()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Remove jobs que foram processados (sent/failed) há mais de 3 dias
+  DELETE FROM public.notification_jobs
+  WHERE status IN ('sent', 'failed')
+    AND processed_at < now() - interval '3 days';
+END;
+$$;
+
+-- 5. Trigger que gera a dose + o aviso antecipado com TAGS para evitar duplicatas visuais
 CREATE OR REPLACE FUNCTION public.handle_medication_jobs()
 RETURNS TRIGGER 
 SECURITY DEFINER 
