@@ -5,6 +5,9 @@
 CREATE TABLE IF NOT EXISTS public.notification_jobs (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
+    medication_id UUID REFERENCES public.medications(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES public.appointments(id) ON DELETE CASCADE,
+    queue_id UUID REFERENCES public.notification_queue(id) ON DELETE CASCADE,
     payload JSONB NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'processing', 'sent', 'failed'
     attempts INTEGER DEFAULT 0,
@@ -21,6 +24,9 @@ CREATE INDEX IF NOT EXISTS idx_notification_jobs_status_trigger ON public.notifi
 WHERE status IN ('pending', 'failed');
 
 CREATE INDEX IF NOT EXISTS idx_notification_jobs_user_id ON public.notification_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_notification_jobs_medication_id ON public.notification_jobs(medication_id);
+CREATE INDEX IF NOT EXISTS idx_notification_jobs_appointment_id ON public.notification_jobs(appointment_id);
+CREATE INDEX IF NOT EXISTS idx_notification_jobs_queue_id ON public.notification_jobs(queue_id);
 
 -- ==========================================
 -- 2. AJUSTES NAS TABELAS EXISTENTES
