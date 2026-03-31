@@ -25,24 +25,6 @@ BEGIN
             m.next_dose_at,
             'med_now:' || m.id || ':' || normalized_dose
         ) ON CONFLICT (idempotency_key) DO NOTHING;
-
-        -- Job Antecipado
-        IF COALESCE(m.advance_minutes, 0) > 0 THEN
-            advance_trigger := m.next_dose_at - (m.advance_minutes || ' minutes')::interval;
-            INSERT INTO public.notification_jobs (user_id, type, payload, trigger_at, idempotency_key)
-            VALUES (
-                m.user_id,
-                'medication_advance',
-                jsonb_build_object(
-                    'title', 'Aviso Antecipado ⏰',
-                    'body', 'Em ' || m.advance_minutes || ' min: ' || m.name,
-                    'type', 'medication_advance',
-                    'medication_id', m.id
-                ),
-                advance_trigger,
-                'med_adv:' || m.id || ':' || normalized_dose
-            ) ON CONFLICT (idempotency_key) DO NOTHING;
-        END IF;
     END LOOP;
 END $$;
 

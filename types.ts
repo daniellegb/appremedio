@@ -26,7 +26,6 @@ export interface Medication {
   notes?: string;
   color: string;
   next_dose_at?: string; // ISO string
-  advanceMinutes?: number;
 }
 
 export interface PushSubscriptionData {
@@ -63,7 +62,6 @@ export interface AppSettings {
   thresholdRunningOut: number;
   showDelayDisclaimer: boolean;
   showGreeting: boolean;
-  preNotificationMinutes: number;
 }
 
 export interface Profile {

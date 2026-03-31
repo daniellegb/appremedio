@@ -1,11 +1,11 @@
 
--- 1. Tabela de assinaturas push (Refatorada para campos individuais p256dh e auth)
+-- 1. Tabela de assinaturas push (Refatorada para JSONB)
 CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
   endpoint TEXT NOT NULL,
-  p256dh TEXT NOT NULL,
-  auth TEXT NOT NULL,
+  subscription JSONB NOT NULL,
+  timezone TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id, endpoint)
 );

@@ -351,29 +351,6 @@ const Settings: React.FC<Props> = ({ settings, onUpdateSettings, onClearData }) 
                 </button>
               </div>
             </div>
-
-            <div className={`flex items-center justify-between gap-4 pt-4 border-t border-slate-50 transition-opacity ${!pushEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-50 text-blue-500 rounded-lg">
-                  <Bell size={20} />
-                </div>
-                <div>
-                  <div className="font-bold text-slate-700 text-sm md:text-base">Aviso Antecipado</div>
-                  <div className="text-[10px] md:text-xs text-slate-400">Minutos antes do horário</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <input 
-                  type="number" 
-                  min="0"
-                  max="60"
-                  className="w-16 md:w-20 bg-slate-50 border-none rounded-xl px-2 md:px-4 py-2 text-center font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
-                  value={settings.preNotificationMinutes}
-                  onChange={e => onUpdateSettings({ ...settings, preNotificationMinutes: Math.min(60, Math.max(0, parseInt(e.target.value) || 0)) })}
-                />
-                <span className="text-xs font-bold text-slate-400">min</span>
-              </div>
-            </div>
           </div>
         </div>
 

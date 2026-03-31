@@ -14,6 +14,7 @@ import { useAuthContext } from '../context/AuthContext';
 import { medicationService } from '../services/medicationService';
 import { consumptionService } from '../services/consumptionService';
 import { appointmentService } from '../services/appointmentService';
+import { dataService } from '../services/dataService';
 import { useLocation } from 'react-router-dom';
 
 import { getUpdatedStock } from '../domain/stock';
@@ -29,8 +30,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   thresholdExpiring: 3,
   thresholdRunningOut: 3,
   showDelayDisclaimer: true,
-  showGreeting: true,
-  preNotificationMinutes: 5
+  showGreeting: true
 };
 
 const MainApp: React.FC = () => {
@@ -113,6 +113,7 @@ const MainApp: React.FC = () => {
       }
     }
   };
+
 
   useEffect(() => {
     // A sincronização agora é automática via banco de dados (notification_jobs)
@@ -363,7 +364,7 @@ const MainApp: React.FC = () => {
       case 'meds':
         return <Medications meds={meds} settings={settings} onAdd={() => { setEditingMedication(null); setInitialMedCategory(undefined); setView('add-med'); }} onEdit={handleEditMedication} onDelete={handleDeleteMed} />;
       case 'add-med':
-        return <AddMedication onSave={handleSaveMedication} onCancel={() => setView('meds')} initialData={editingMedication} initialCategory={initialMedCategory} />;
+        return <AddMedication onSave={handleSaveMedication} onCancel={() => setView('meds')} initialData={editingMedication} initialCategory={initialMedCategory} settings={settings} />;
       case 'appointments':
         return <Appointments appointments={appointments} onAddClick={() => { setEditingAppointment(null); setView('add-appointment'); }} onEditClick={(app) => { setEditingAppointment(app); setView('add-appointment'); }} onDeleteClick={handleDeleteAppointment} />;
       case 'add-appointment':
@@ -378,9 +379,17 @@ const MainApp: React.FC = () => {
             openConfirm(
               'Limpar Dados',
               'Isso apagará todos os seus remédios e consultas. Esta ação não pode ser desfeita. Continuar?',
-              () => {
-                localStorage.clear();
-                window.location.reload();
+              async () => {
+                if (user) {
+                  try {
+                    await dataService.clearUserData(user.id);
+                    // Não chamamos localStorage.clear() para manter configurações e onboarding
+                    window.location.reload();
+                  } catch (error) {
+                    console.error('Erro ao limpar dados:', error);
+                    alert('Erro ao limpar dados. Tente novamente.');
+                  }
+                }
               }
             );
           }} 

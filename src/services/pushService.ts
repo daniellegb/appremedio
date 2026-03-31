@@ -128,6 +128,15 @@ export const pushService = {
     } catch (err) {
       return { error: err };
     }
+  },
+
+  async deleteAllNotificationJobs(userId: string) {
+    const { error } = await supabase
+      .from('notification_jobs')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
   }
 };
 

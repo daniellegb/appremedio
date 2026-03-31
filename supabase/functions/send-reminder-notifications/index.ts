@@ -38,7 +38,34 @@ serve(async (req) => {
     }
   }
 
-  // --- 0. TEST NOTIFICATION (Bypass Queue) ---
+  // --- 0. DEBUG / VAPID CHECK ---
+  if (body.debug) {
+    const clientVapid = (body.clientEnv?.VAPID_PUBLIC_KEY || '').trim();
+    const serverVapid = (Deno.env.get('VAPID_PUBLIC_KEY') || '').trim();
+    
+    const match = clientVapid === serverVapid;
+    
+    console.log(`Debug check: Client VAPID: ${clientVapid?.substring(0, 10)}... (len: ${clientVapid.length}) Server VAPID: ${serverVapid?.substring(0, 10)}... (len: ${serverVapid.length}) Match: ${match}`);
+    
+    return new Response(JSON.stringify({ 
+      vapidMatch: match,
+      server: {
+        vapidPreview: serverVapid ? `${serverVapid.substring(0, 10)}...` : 'MISSING',
+        vapidLength: serverVapid.length,
+        url: Deno.env.get('SUPABASE_URL')
+      },
+      client: {
+        vapidPreview: clientVapid ? `${clientVapid.substring(0, 10)}...` : 'MISSING',
+        vapidLength: clientVapid.length,
+        url: body.clientEnv?.SUPABASE_URL
+      }
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    })
+  }
+
+  // --- 0.5. TEST NOTIFICATION (Bypass Queue) ---
   if (body.test && body.userId) {
     console.log(`Manual test requested for user: ${body.userId}`)
     const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:example@yourdomain.com'

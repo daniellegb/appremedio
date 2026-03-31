@@ -88,25 +88,6 @@ BEGIN
       NEW.next_dose_at,
       'med_now:' || NEW.id || ':' || normalized_dose
     ) ON CONFLICT (idempotency_key) DO NOTHING;
-
-    -- 2. Job de Aviso Antecipado (se configurado)
-    IF COALESCE(NEW.advance_minutes, 0) > 0 THEN
-      advance_trigger := NEW.next_dose_at - (NEW.advance_minutes || ' minutes')::interval;
-      
-      INSERT INTO public.notification_jobs (user_id, type, payload, trigger_at, idempotency_key)
-      VALUES (
-        NEW.user_id,
-        'medication_advance',
-        jsonb_build_object(
-          'title', 'Aviso Antecipado ⏰',
-          'body', 'Em ' || NEW.advance_minutes || ' min: ' || NEW.name,
-          'type', 'medication_advance',
-          'medication_id', NEW.id
-        ),
-        advance_trigger,
-        'med_adv:' || NEW.id || ':' || normalized_dose
-      ) ON CONFLICT (idempotency_key) DO NOTHING;
-    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -114,7 +95,7 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS on_medication_upsert ON public.medications;
 CREATE TRIGGER on_medication_upsert
-AFTER INSERT OR UPDATE OF next_dose_at, advance_minutes ON public.medications
+AFTER INSERT OR UPDATE OF next_dose_at ON public.medications
 FOR EACH ROW EXECUTE FUNCTION public.handle_medication_jobs();
 
 -- Trigger para Notification Queue

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Appointment, AppointmentType } from '../types';
-import { ChevronLeft, Stethoscope, TestTubeDiagonal, User, Calendar, Clock, MapPin } from 'lucide-react';
+import { ChevronLeft, Stethoscope, TestTubeDiagonal, User, Calendar, Clock, MapPin, Bell } from 'lucide-react';
 
 interface Props {
   onSave: (appointment: Appointment) => void;
@@ -153,6 +153,7 @@ const AddAppointment: React.FC<Props> = ({ onSave, onCancel, initialData }) => {
               onChange={e => setFormData({...formData, location: e.target.value})}
             />
           </div>
+
         </div>
 
         <button

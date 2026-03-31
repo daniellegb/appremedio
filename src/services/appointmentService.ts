@@ -48,22 +48,6 @@ export const appointmentService = {
       .single();
 
     if (error) throw error;
-
-    // Agendar notificação para o dia anterior às 08:00
-    if (created.date) {
-      const triggerDate = new Date(created.date);
-      triggerDate.setDate(triggerDate.getDate() - 1);
-      triggerDate.setHours(8, 0, 0, 0);
-      
-      await notificationService.scheduleAppointmentNotification(
-        userId,
-        created.id,
-        created.doctor || created.specialty || 'Consulta',
-        created.type,
-        triggerDate.toISOString()
-      );
-    }
-
     return mapToCamelCase(created);
   },
 
@@ -80,26 +64,18 @@ export const appointmentService = {
       .single();
 
     if (error) throw error;
-
-    // Re-agendar se a data mudou
-    if (data.date) {
-      const triggerDate = new Date(updated.date);
-      triggerDate.setDate(triggerDate.getDate() - 1);
-      triggerDate.setHours(8, 0, 0, 0);
-      
-      await notificationService.scheduleAppointmentNotification(
-        userId,
-        updated.id,
-        updated.doctor || updated.specialty || 'Consulta',
-        updated.type,
-        triggerDate.toISOString()
-      );
-    }
-
     return mapToCamelCase(updated);
   },
 
   async deleteAppointment(userId: string, id: string) {
+    // 1. Deletar notificações associadas (todas, não apenas pendentes)
+    await supabase
+      .from('notification_jobs')
+      .delete()
+      .eq('entity_id', id)
+      .eq('user_id', userId);
+
+    // 2. Deletar o compromisso
     const { error } = await supabase
       .from('appointments')
       .delete()

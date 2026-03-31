@@ -47,29 +47,53 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
   const [debugJobs, setDebugJobs] = useState<any[]>([]);
   const [debugSubs, setDebugSubs] = useState<any[]>([]);
   const [vapidStatus, setVapidStatus] = useState<any>(null);
+  const [dbNow, setDbNow] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
 
   const fetchDebugJobs = async () => {
     if (!user) return;
     try {
-      const [jobsRes, subsRes, vapidRes] = await Promise.all([
+      const [jobsRes, subsRes, vapidRes, nowRes] = await Promise.all([
         supabase
           .from('notification_jobs')
           .select('*')
           .eq('user_id', user.id)
           .order('trigger_at', { ascending: true })
-          .limit(10),
+          .limit(20),
         supabase
           .from('push_subscriptions')
           .select('*')
           .eq('user_id', user.id),
-        pushService.checkVapidMatch()
+        pushService.checkVapidMatch(),
+        supabase.rpc('get_current_time')
       ]);
       setDebugJobs(jobsRes.data || []);
       setDebugSubs(subsRes.data || []);
       setVapidStatus(vapidRes);
+      setDbNow(nowRes.data);
     } catch (err) {
       console.error('Error fetching debug info:', err);
+    }
+  };
+
+  const handleTriggerNow = async (jobId: string) => {
+    try {
+      await supabase.rpc('trigger_notification_job_now', { p_job_id: jobId });
+      await pushService.processQueue();
+      await fetchDebugJobs();
+    } catch (err) {
+      console.error("Erro ao forçar disparo:", err);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    if (!user) return;
+    try {
+      await pushService.sendTestNotification(user.id);
+      alert("Notificação de teste enviada!");
+    } catch (err) {
+      console.error("Erro no teste:", err);
+      alert("Erro ao enviar teste. Verifique o console.");
     }
   };
 
@@ -330,9 +354,23 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
         <div className="bg-slate-900 text-slate-100 p-6 rounded-[32px] shadow-xl font-mono text-xs overflow-auto max-h-96">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-purple-400">Debug de Notificações</h3>
-            <button onClick={() => fetchDebugJobs()} className="text-blue-400 underline">Atualizar</button>
+            <div className="flex gap-4">
+              <button onClick={handleTestNotification} className="text-green-400 underline">Testar Push</button>
+              <button onClick={async () => {
+                if(confirm('Limpar todos os jobs pendentes?')) {
+                  await supabase.from('notification_jobs').delete().eq('status', 'pending').eq('user_id', user.id);
+                  fetchDebugJobs();
+                }
+              }} className="text-red-400 underline">Limpar Jobs</button>
+              <button onClick={() => fetchDebugJobs()} className="text-blue-400 underline">Atualizar</button>
+            </div>
           </div>
           <div className="space-y-4">
+            <div className="bg-slate-800 p-3 rounded-xl mb-4">
+              <p className="text-slate-400 uppercase tracking-wider text-[10px] mb-1">Horário do Servidor (UTC):</p>
+              <p className="text-lg font-bold text-white">{dbNow ? new Date(dbNow).toLocaleString('pt-BR') : 'Carregando...'}</p>
+              <p className="text-[10px] text-slate-500">Seu Horário Local: {new Date().toLocaleString('pt-BR')}</p>
+            </div>
             <div>
               <p className="text-slate-400 mb-1 uppercase tracking-wider">Seus Medicamentos:</p>
               <div className="space-y-2">
@@ -340,7 +378,6 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
                   <div key={med.id} className="border-l-2 border-blue-500 pl-3 py-1 bg-slate-800/50 rounded-r-lg">
                     <p className="font-bold text-blue-300">{med.name}</p>
                     <p>Próxima Dose: {med.next_dose_at ? new Date(med.next_dose_at).toLocaleString('pt-BR') : 'N/A'}</p>
-                    <p>Aviso Antecipado: {med.advanceMinutes || 0} min</p>
                   </div>
                 ))}
               </div>
@@ -348,12 +385,12 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
             <div>
               <p className="text-slate-400 mb-1 uppercase tracking-wider">Status VAPID:</p>
               {vapidStatus ? (
-                <div className={`border-l-2 ${vapidStatus.match ? 'border-green-500' : 'border-red-500'} pl-3 py-1 bg-slate-800/50 rounded-r-lg`}>
-                  <p className={vapidStatus.match ? 'text-green-300' : 'text-red-300'}>
-                    {vapidStatus.match ? '✅ Chaves VAPID coincidem' : '❌ Chaves VAPID não coincidem!'}
+                <div className={`border-l-2 ${vapidStatus.vapidMatch ? 'border-green-500' : 'border-red-500'} pl-3 py-1 bg-slate-800/50 rounded-r-lg`}>
+                  <p className={vapidStatus.vapidMatch ? 'text-green-300' : 'text-red-300'}>
+                    {vapidStatus.vapidMatch ? '✅ Chaves VAPID coincidem' : '❌ Chaves VAPID não coincidem!'}
                   </p>
-                  <p className="text-[10px] text-slate-400">Public Key (Frontend): {vapidStatus.clientKey?.substring(0, 20)}...</p>
-                  <p className="text-[10px] text-slate-400">Public Key (Edge): {vapidStatus.serverKey?.substring(0, 20)}...</p>
+                  <p className="text-[10px] text-slate-400">Public Key (Frontend): {vapidStatus.client?.vapidPreview} (len: {vapidStatus.client?.vapidLength ?? 0})</p>
+                  <p className="text-[10px] text-slate-400">Public Key (Edge): {vapidStatus.server?.vapidPreview} (len: {vapidStatus.server?.vapidLength ?? 0})</p>
                 </div>
               ) : (
                 <p className="text-slate-500 italic">Verificando VAPID...</p>
@@ -381,14 +418,50 @@ const Dashboard: React.FC<Props> = ({ meds, doses, appointments, settings, onTog
               ) : (
                 <div className="space-y-2">
                   {debugJobs.map(job => (
-                    <div key={job.id} className="border-l-2 border-purple-500 pl-3 py-1 bg-slate-800/50 rounded-r-lg">
-                      <div className="flex justify-between">
-                        <span className="font-bold text-purple-300">{job.type}</span>
-                        <span className={job.status === 'pending' ? 'text-yellow-400' : 'text-green-400'}>{job.status}</span>
+                    <div key={job.id} className="border-l-2 border-purple-500 pl-3 py-2 bg-slate-800/50 rounded-r-lg">
+                      <div className="flex justify-between items-start mb-1">
+                        <div>
+                          <span className="font-bold text-purple-300 block">{job.type}</span>
+                          <span className="text-[9px] text-slate-500 font-mono">ID: {job.id.slice(0,8)}...</span>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            job.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : 
+                            job.status === 'sent' ? 'bg-green-500/20 text-green-400' : 
+                            'bg-red-500/20 text-red-400'
+                          }`}>
+                            {job.status}
+                          </span>
+                          {job.status === 'pending' && (
+                            <button 
+                              onClick={() => handleTriggerNow(job.id)}
+                              className="text-[9px] text-blue-400 underline hover:text-blue-300"
+                            >
+                              Disparar Agora
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <p>Trigger: {new Date(job.trigger_at).toLocaleString('pt-BR')}</p>
-                      <p className="text-[10px] text-slate-400 truncate">Payload: {JSON.stringify(job.payload)}</p>
-                      {job.error_message && <p className="text-red-400">Erro: {job.error_message}</p>}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] mb-2">
+                        <p><span className="text-slate-500">Trigger:</span> {new Date(job.trigger_at).toLocaleString('pt-BR')}</p>
+                        <p><span className="text-slate-500">Scheduled:</span> {job.scheduled_at ? new Date(job.scheduled_at).toLocaleString('pt-BR') : 'N/A'}</p>
+                        <p><span className="text-slate-500">Entity:</span> {job.entity_id?.slice(0,8) || 'N/A'}</p>
+                        <p><span className="text-slate-500">Attempts:</span> {job.attempts}/{job.max_attempts}</p>
+                      </div>
+                      <div className="bg-slate-900/50 p-2 rounded border border-slate-700">
+                        <p className="text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-tighter">Payload Padronizado:</p>
+                        <div className="grid grid-cols-1 gap-1 text-[9px]">
+                          <p><span className="text-slate-500">Title:</span> {job.payload?.title}</p>
+                          <p><span className="text-slate-500">Body:</span> {job.payload?.body}</p>
+                          <p><span className="text-slate-500">Tag:</span> <code className="text-purple-300">{job.payload?.tag}</code></p>
+                          <p><span className="text-slate-500">URL:</span> <code className="text-blue-300">{job.payload?.url}</code></p>
+                        </div>
+                      </div>
+                      {job.error_message && (
+                        <div className="mt-2 p-1.5 bg-red-900/20 border border-red-900/50 rounded text-[9px] text-red-400">
+                          <span className="font-bold uppercase">Erro:</span> {job.error_message}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -114,5 +114,14 @@ export const consumptionService = {
 
     if (error) throw error;
     return mapToCamelCase(updated);
+  },
+
+  async deleteAllConsumptionRecords(userId: string) {
+    const { error } = await supabase
+      .from('consumption_records')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
   }
 };

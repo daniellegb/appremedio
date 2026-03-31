@@ -41,5 +41,14 @@ export const notificationService = {
       }]);
 
     if (error) console.error('Error scheduling appointment notification:', error);
+  },
+
+  async deleteAllNotifications(userId: string) {
+    const { error } = await supabase
+      .from('notification_queue')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
   }
 };
